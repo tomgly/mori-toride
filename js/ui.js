@@ -12,7 +12,7 @@ const UI = (() => {
 
   const canvas = document.getElementById('game-canvas');
 
-  // 駒の移動説明
+  // 駒の移動説明（手札カード表示用）
   const MOVE_DESC = {
     bear:   '8方向1マス',
     wolf:   '8方向1マス',
@@ -294,15 +294,18 @@ const UI = (() => {
 
   function _updateInfo() {
     if (!gameState) return;
-    const p0 = gameState.players[0], p1 = gameState.players[1];
-    document.getElementById('sente-name').textContent        = p0.name || '---';
-    document.getElementById('gote-name').textContent         = p1.name || '---';
-    document.getElementById('sente-hand-count').textContent  = p0.hand.length;
-    document.getElementById('gote-hand-count').textContent   = p1.hand.length;
-    document.getElementById('sente-field-count').textContent = p0.field.length + 1; // +1 for boss
-    document.getElementById('gote-field-count').textContent  = p1.field.length + 1; // +1 for boss
-    document.getElementById('sente-panel').classList.toggle('panel-active', gameState.turn === 0);
-    document.getElementById('gote-panel').classList.toggle('panel-active',  gameState.turn === 1);
+    const meIdx  = myIndex === -1 ? 0 : myIndex;
+    const oppIdx = 1 - meIdx;
+    const pMe  = gameState.players[meIdx];
+    const pOpp = gameState.players[oppIdx];
+    document.getElementById('your-name').textContent        = pMe.name  || '---';
+    document.getElementById('opp-name').textContent         = pOpp.name || '---';
+    document.getElementById('your-hand-count').textContent  = pMe.hand.length;
+    document.getElementById('opp-hand-count').textContent   = pOpp.hand.length;
+    document.getElementById('your-field-count').textContent = pMe.field.length  + 1;
+    document.getElementById('opp-field-count').textContent  = pOpp.field.length + 1;
+    document.getElementById('your-panel').classList.toggle('panel-active', gameState.turn === meIdx);
+    document.getElementById('opp-panel').classList.toggle('panel-active',  gameState.turn === oppIdx);
   }
 
   function _updateStatus() {
@@ -318,75 +321,71 @@ const UI = (() => {
 
   function _refreshHandPanel() {
     if (!gameState) return;
-
-    // 自分のプレイヤーindex
     const meIdx  = myIndex === -1 ? 0 : myIndex;
     const oppIdx = 1 - meIdx;
 
-    // hand-p0 = 右パネル = 自分、hand-p1 = 左パネル = 相手
-    const assignments = [
-      { panelId: 'hand-p0', pIdx: meIdx,  isMe: myIndex !== -1 },
-      { panelId: 'hand-p1', pIdx: oppIdx, isMe: false },
-    ];
+    // ラベル更新
+    const yourLabel = document.getElementById('hand-label-your');
+    const oppLabel  = document.getElementById('hand-label-opp');
+    if (yourLabel) yourLabel.textContent = myIndex === -1 ? '先手の手札' : 'あなたの手札';
+    if (oppLabel)  oppLabel.textContent  = myIndex === -1 ? '後手の手札' : '相手の手札';
 
-    // ラベルも正しく設定
-    const rightLabel = document.getElementById('hand-label-right');
-    const leftLabel  = document.getElementById('hand-label-left');
-    if (rightLabel) rightLabel.textContent = myIndex === -1 ? '先手の手札' : 'あなたの手札';
-    if (leftLabel)  leftLabel.textContent  = myIndex === -1 ? '後手の手札' : '相手の手札';
+    // PC用パネル（hand-your=右=自分、hand-opp=左=相手）
+    _buildHandPanel('hand-your', meIdx,  myIndex !== -1);
+    _buildHandPanel('hand-opp',  oppIdx, false);
+    // スマホ用パネル（独立ビルド、イベントも正しく設定）
+    _buildHandPanel('hand-your-mobile', meIdx,  myIndex !== -1);
+    _buildHandPanel('hand-opp-mobile',  oppIdx, false);
+  }
 
-    for (const { panelId, pIdx, isMe } of assignments) {
-      const p     = gameState.players[pIdx];
-      const color = pIdx === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
-      const panel = document.getElementById(panelId);
-      if (!panel) continue;
-      panel.innerHTML = '';
+  function _buildHandPanel(panelId, pIdx, isMe) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    panel.innerHTML = '';
+    const p     = gameState.players[pIdx];
+    const color = pIdx === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
 
-      // 手札
-      for (const piece of p.hand) {
-        const btn = document.createElement('button');
-        btn.className = 'hand-card';
-        const isSel = selected && selected.type === 'hand' && selected.id === piece.id && pIdx === myIndex;
-        if (isSel) btn.classList.add('selected');
-        btn.style.borderColor = color;
-        const desc = MOVE_DESC[piece.id] || '';
-        btn.innerHTML = `
-          <span class="card-emoji">${piece.emoji}</span>
-          <span class="card-name">${piece.name}</span>
-          <span class="card-move">${desc}</span>`;
-        if (isMe && myTurn && !gameState.over) {
-          btn.addEventListener('click', () => onHandCardClick(piece.id));
-        } else {
-          btn.disabled = true;
-        }
-        panel.appendChild(btn);
+    // 手札駒
+    for (const piece of p.hand) {
+      const btn = document.createElement('button');
+      btn.className = 'hand-card';
+      const isSel = isMe && selected && selected.type === 'hand' && selected.id === piece.id;
+      if (isSel) btn.classList.add('selected');
+      btn.style.borderColor = color;
+      const desc = MOVE_DESC[piece.id] || '';
+      btn.innerHTML =
+        `<span class="card-emoji">${piece.emoji}</span>` +
+        `<span class="card-name">${piece.name}</span>` +
+        `<span class="card-move">${desc}</span>`;
+      if (isMe && myTurn && !gameState.over) {
+        btn.addEventListener('click', () => onHandCardClick(piece.id));
+      } else {
+        btn.disabled = true;
       }
+      panel.appendChild(btn);
+    }
 
-      // 盤上の駒
-      for (const f of p.field) {
-        const btn = document.createElement('button');
-        btn.className = 'hand-card hand-card--field';
-        const desc = MOVE_DESC[f.id] || '';
-        btn.innerHTML = `
-          <span class="card-emoji">${f.emoji}</span>
-          <span class="card-name">${f.name}</span>
-          <span class="card-move">${desc}</span>
-          <span class="card-field-badge">盤上</span>`;
-        if (isMe && myTurn && !gameState.over) {
-          btn.addEventListener('click', () => onReturnPiece(f.id));
-          btn.title = '手持ちに戻す';
-        } else {
-          btn.disabled = true;
-        }
-        panel.appendChild(btn);
+    // 盤上の駒（グレー・戻す操作）
+    for (const f of p.field) {
+      const btn = document.createElement('button');
+      btn.className = 'hand-card hand-card--field';
+      const desc = MOVE_DESC[f.id] || '';
+      btn.innerHTML =
+        `<span class="card-emoji">${f.emoji}</span>` +
+        `<span class="card-name">${f.name}</span>` +
+        `<span class="card-move">${desc}</span>` +
+        `<span class="card-field-badge">盤上</span>`;
+      if (isMe && myTurn && !gameState.over) {
+        btn.addEventListener('click', () => onReturnPiece(f.id));
+        btn.title = '手持ちに戻す';
+      } else {
+        btn.disabled = true;
       }
+      panel.appendChild(btn);
+    }
 
-      if (panel.children.length === 0) {
-        panel.innerHTML = '<div class="hand-empty">手札なし</div>';
-      }
-
-      const mob = document.getElementById(panelId + '-mobile');
-      if (mob) mob.innerHTML = panel.innerHTML;
+    if (panel.children.length === 0) {
+      panel.innerHTML = '<div class="hand-empty">手札なし</div>';
     }
   }
 

@@ -41,10 +41,9 @@
   </div>
 </header>
 
-<!-- ══════════════════════════════════════════════
-     ロビー画面
-══════════════════════════════════════════════ -->
+<!-- ══ ロビー画面 ══════════════════════════════════════════════ -->
 <div class="screen active" id="screen-lobby">
+
   <div class="lobby-hero">
     <div class="lobby-title">もりのとりで</div>
     <div class="lobby-animals">🐻🐺🦊🦝🐗🐰</div>
@@ -100,9 +99,7 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════
-     待機画面
-══════════════════════════════════════════════ -->
+<!-- ══ 待機画面 ══════════════════════════════════════════════ -->
 <div class="screen" id="screen-waiting">
 
   <div class="waiting-icon">🌿</div>
@@ -127,30 +124,28 @@
   </button>
 </div>
 
-<!-- ══════════════════════════════════════════════
-     ゲーム画面
-══════════════════════════════════════════════ -->
+<!-- ══ ゲーム画面 ══════════════════════════════════════════════ -->
 <div class="screen" id="screen-game">
 
   <!-- 相手 -->
-  <div class="player-bar player-bar--top" id="gote-panel">
+  <div class="player-bar player-bar--top" id="opp-panel">
     <div class="pb-info">
-      <div class="pb-badge" id="gote-label">相手</div>
-      <div class="pb-name" id="gote-name">---</div>
+      <div class="pb-badge" id="opp-label">相手</div>
+      <div class="pb-name" id="opp-name">---</div>
     </div>
     <div class="pb-counts">
-      <span>手札 <strong id="gote-hand-count">5</strong></span>
-      <span>盤上 <strong id="gote-field-count">0</strong></span>
+      <span>手札 <strong id="opp-hand-count">5</strong></span>
+      <span>盤上 <strong id="opp-field-count">0</strong></span>
     </div>
   </div>
 
   <!-- ゲームエリア -->
   <div class="game-area">
 
-    <!-- 左手札 -->
+    <!-- 相手の手札 -->
     <div class="hand-panel hand-panel--left" id="hand-panel-left">
-      <div class="hand-label" id="hand-label-left">相手の手札</div>
-      <div class="hand-cards" id="hand-p1"></div>
+      <div class="hand-label" id="hand-label-opp">相手の手札</div>
+      <div class="hand-cards" id="hand-opp"></div>
     </div>
 
     <!-- Canvas -->
@@ -158,10 +153,10 @@
       <canvas id="game-canvas"></canvas>
     </div>
 
-    <!-- 右手札 -->
+    <!-- あなたの手札 -->
     <div class="hand-panel hand-panel--right" id="hand-panel-right">
-      <div class="hand-label" id="hand-label-right">あなたの手札</div>
-      <div class="hand-cards" id="hand-p0"></div>
+      <div class="hand-label" id="hand-label-your">あなたの手札</div>
+      <div class="hand-cards" id="hand-your"></div>
     </div>
 
   </div>
@@ -170,23 +165,23 @@
   <div class="hand-panel-mobile">
     <div class="hand-mobile-row">
       <div class="hm-label">相手</div>
-      <div class="hand-cards hand-cards--mobile" id="hand-p1-mobile"></div>
+      <div class="hand-cards hand-cards--mobile" id="hand-opp-mobile"></div>
     </div>
     <div class="hand-mobile-row">
       <div class="hm-label">あなた</div>
-      <div class="hand-cards hand-cards--mobile" id="hand-p0-mobile"></div>
+      <div class="hand-cards hand-cards--mobile" id="hand-your-mobile"></div>
     </div>
   </div>
 
   <!-- あなた -->
-  <div class="player-bar player-bar--bottom" id="sente-panel">
+  <div class="player-bar player-bar--bottom" id="your-panel">
     <div class="pb-info">
-      <div class="pb-badge" id="sente-label">あなた</div>
-      <div class="pb-name" id="sente-name">---</div>
+      <div class="pb-badge" id="your-label">あなた</div>
+      <div class="pb-name" id="your-name">---</div>
     </div>
     <div class="pb-counts">
-      <span>手札 <strong id="sente-hand-count">5</strong></span>
-      <span>盤上 <strong id="sente-field-count">0</strong></span>
+      <span>手札 <strong id="your-hand-count">5</strong></span>
+      <span>盤上 <strong id="your-field-count">0</strong></span>
     </div>
   </div>
 
@@ -197,9 +192,7 @@
 
 </div>
 
-<!-- ══════════════════════════════════════════════
-     結果オーバーレイ
-══════════════════════════════════════════════ -->
+<!-- ══ 結果オーバーレイ ════════════════════════════════════════ -->
 <div id="result-overlay">
   <div class="result-box">
     <div class="result-animals">🎊</div>
