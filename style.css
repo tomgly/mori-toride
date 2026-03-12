@@ -583,3 +583,39 @@ canvas { display: block; image-rendering: pixelated; }
 /* ══ ユーティリティ ════════════════════════════════════════ */
 .mt8  { margin-top: 8px; }
 .mt16 { margin-top: 16px; }
+
+/* 手札カードの移動説明 */
+.card-move {
+  font-size: 0.48rem;
+  color: var(--dim2);
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.card-field-badge {
+  font-size: 0.45rem;
+  color: white;
+  background: var(--mint);
+  border-radius: 6px;
+  padding: 1px 5px;
+  margin-top: 2px;
+}
+
+/* 手札カードの移動説明 */
+.card-move {
+  font-size: 0.48rem;
+  color: var(--dim2);
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.card-field-badge {
+  font-size: 0.45rem;
+  color: white;
+  background: var(--mint);
+  border-radius: 6px;
+  padding: 1px 5px;
+  margin-top: 2px;
+}

@@ -1,229 +1,264 @@
 const Game = (() => {
 
-  // 盤面キー
   function pk(col, row) { return `${col},${row}`; }
 
-  // 初期状態を生成
   function createState(nameA, nameB, firstTurn = 0) {
     const { COLS, ROWS, PIECES } = CFG;
     const midCol = Math.floor(COLS / 2);
-
-    const p0 = {
-      name: nameA,
-      boss: { col: midCol, row: ROWS - 1, flip: false },
-      hand: PIECES.slice(1).map(p => ({ ...p })),
-      field: [],
-    };
-    const p1 = {
-      name: nameB,
-      boss: { col: midCol, row: 0, flip: true },
-      hand: PIECES.slice(1).map(p => ({ ...p })),
-      field: [],
-    };
-
+    const midRow = Math.floor(ROWS / 2);
     return {
-      players: [p0, p1],
+      players: [
+        { name: nameA, boss: { col: midCol, row: midRow + 1 }, hand: PIECES.slice(1).map(p => ({ ...p })), field: [] },
+        { name: nameB, boss: { col: midCol, row: midRow     }, hand: PIECES.slice(1).map(p => ({ ...p })), field: [] },
+      ],
       turn: firstTurn,
       firstTurn,
       over: false,
       winner: null,
-      phase: 'play',
     };
   }
 
-  // 盤上の全駒マップを生成（衝突判定用）
   function buildOccupied(state) {
     const map = new Map();
     for (let i = 0; i < 2; i++) {
       const p = state.players[i];
       map.set(pk(p.boss.col, p.boss.row), { pIdx: i, type: 'boss', piece: CFG.PIECES[0] });
-      for (const f of p.field) {
-        map.set(pk(f.col, f.row), { pIdx: i, type: 'field', piece: f });
-      }
+      for (const f of p.field) map.set(pk(f.col, f.row), { pIdx: i, type: 'field', piece: f });
     }
     return map;
   }
 
-  // 移動方向デルタ
   const DIRS = {
-    up:    [  0, -1 ],
-    down:  [  0,  1 ],
-    left:  [ -1,  0 ],
-    right: [  1,  0 ],
-    ul:    [ -1, -1 ],
-    ur:    [  1, -1 ],
-    dl:    [ -1,  1 ],
-    dr:    [  1,  1 ],
+    up:[0,-1], down:[0,1], left:[-1,0], right:[1,0],
+    ul:[-1,-1], ur:[1,-1], dl:[-1,1], dr:[1,1],
   };
-
   const ALL8          = ['up','down','left','right','ul','ur','dl','dr'];
   const ALL4_STRAIGHT = ['up','down','left','right'];
   const ALL4_DIAG     = ['ul','ur','dl','dr'];
 
-  function inBounds(col, row) {
-    return col >= 0 && col < CFG.COLS && row >= 0 && row < CFG.ROWS;
-  }
+  function inBounds(col, row) { return col >= 0 && col < CFG.COLS && row >= 0 && row < CFG.ROWS; }
 
   function step(col, row, dir) {
     const [dc, dr] = DIRS[dir];
     return { col: col + dc, row: row + dr };
   }
 
-  // 合法移動先を返す
-  // pieceType: 'bear' | 'wolf' | 'fox' | 'tanuki' | 'boar' | 'rabbit'
-  function legalMovesForPiece(col, row, pieceType, flip, occupied, pIdx) {
-    const moves = [];
-    const occ = occupied;
+  // 指定プレイヤーの全駒座標リスト
+  function getAllPieces(player) {
+    return [{ col: player.boss.col, row: player.boss.row }, ...player.field.map(f => ({ col: f.col, row: f.row }))];
+  }
 
-    // bear / wolf: 8方向1マス
-    if (pieceType === 'bear' || pieceType === 'wolf') {
+  // BFS連結チェック（8方向）
+  function isConnected(pieces) {
+    if (pieces.length <= 1) return true;
+    const set = new Set(pieces.map(p => pk(p.col, p.row)));
+    const visited = new Set();
+    const queue = [pieces[0]];
+    visited.add(pk(pieces[0].col, pieces[0].row));
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const dir of ALL8) {
+        const nb = step(cur.col, cur.row, dir);
+        const k = pk(nb.col, nb.row);
+        if (set.has(k) && !visited.has(k)) { visited.add(k); queue.push(nb); }
+      }
+    }
+    return visited.size === pieces.length;
+  }
+
+  // bounding box チェック: 全駒(+新座標)が4×4以内か
+  function withinBBox(pieces) {
+    if (pieces.length === 0) return true;
+    const cols = pieces.map(p => p.col);
+    const rows = pieces.map(p => p.row);
+    return (Math.max(...cols) - Math.min(...cols) < 4) &&
+           (Math.max(...rows) - Math.min(...rows) < 4);
+  }
+
+  // いずれかの駒と辺/角接触しているか
+  function touchesAny(col, row, occupied, excludeKey) {
+    for (const dir of ALL8) {
+      const nb = step(col, row, dir);
+      const k = pk(nb.col, nb.row);
+      if (k === excludeKey) continue;
+      if (occupied.has(k)) return true;
+    }
+    return false;
+  }
+
+  function legalMovesForPiece(col, row, pieceType, occupied, pIdx, player) {
+    const moves = [];
+
+    // たいしょう: 自由に8方向1マスし
+    if (pieceType === 'bear') {
       for (const dir of ALL8) {
         const { col: nc, row: nr } = step(col, row, dir);
         if (!inBounds(nc, nr)) continue;
-        const who = occ.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue;
+        const who = occupied.get(pk(nc, nr));
+        if (who && who.pIdx === pIdx) continue; // 味方マス不可
         moves.push({ col: nc, row: nr });
       }
+      return moves;
+    }
+
+    // 移動後の連結チェック用: 移動元を除いた残り自駒
+    const myPiecesWithout = getAllPieces(player).filter(p => !(p.col === col && p.row === row));
+
+    const _tryAdd = (nc, nr) => {
+      if (!inBounds(nc, nr)) return;
+      const who = occupied.get(pk(nc, nr));
+      if (who && who.pIdx === pIdx) return; // 味方マス不可
+
+      // 移動後の自駒リスト
+      const afterPieces = [...myPiecesWithout, { col: nc, row: nr }];
+
+      // 連結維持チェック
+      if (!isConnected(afterPieces)) return;
+
+      // 移動後に駒と接触しているか
+      const occAfter = new Map(occupied);
+      occAfter.delete(pk(col, row));   // 移動元を消す
+      if (who) occAfter.set(pk(nc, nr), who); // 行先に敵がいる場合はそのまま（取る）
+      if (!touchesAny(nc, nr, occAfter, pk(nc, nr))) return;
+
+      moves.push({ col: nc, row: nr });
+    };
+
+    // wolf: 8方向1マス
+    if (pieceType === 'wolf') {
+      for (const dir of ALL8) { const n = step(col, row, dir); _tryAdd(n.col, n.row); }
     }
 
     // fox: 上下左右1マス
     if (pieceType === 'fox') {
-      for (const dir of ALL4_STRAIGHT) {
-        const { col: nc, row: nr } = step(col, row, dir);
-        if (!inBounds(nc, nr)) continue;
-        const who = occ.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue;
-        moves.push({ col: nc, row: nr });
-      }
+      for (const dir of ALL4_STRAIGHT) { const n = step(col, row, dir); _tryAdd(n.col, n.row); }
     }
 
     // tanuki: 斜め1マス
     if (pieceType === 'tanuki') {
-      for (const dir of ALL4_DIAG) {
-        const { col: nc, row: nr } = step(col, row, dir);
-        if (!inBounds(nc, nr)) continue;
-        const who = occ.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue;
-        moves.push({ col: nc, row: nr });
-      }
+      for (const dir of ALL4_DIAG) { const n = step(col, row, dir); _tryAdd(n.col, n.row); }
     }
 
-    // boar: 上下左右スライダー（∞マス）
+    // boar: 上下左右スライダー
     if (pieceType === 'boar') {
       for (const dir of ALL4_STRAIGHT) {
         let c = col, r = row;
         while (true) {
           const { col: nc, row: nr } = step(c, r, dir);
           if (!inBounds(nc, nr)) break;
-          const who = occ.get(pk(nc, nr));
+          const who = occupied.get(pk(nc, nr));
           if (who) {
-            if (who.pIdx !== pIdx) moves.push({ col: nc, row: nr });
+            if (who.pIdx !== pIdx) _tryAdd(nc, nr); // 敵は取れる（止まる）
             break;
           }
-          moves.push({ col: nc, row: nr });
+          _tryAdd(nc, nr);
           c = nc; r = nr;
         }
       }
     }
 
-    // rabbit: ナイト（L字、飛び越し可）
+    // rabbit: L字
     if (pieceType === 'rabbit') {
-      const knightMoves = [
-        [-2,-1],[-2,1],[2,-1],[2,1],
-        [-1,-2],[-1,2],[1,-2],[1,2],
-      ];
-      for (const [dc, dr] of knightMoves) {
-        const nc = col + dc, nr = row + dr;
-        if (!inBounds(nc, nr)) continue;
-        const who = occ.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue;
-        moves.push({ col: nc, row: nr });
+      for (const [dc, dr] of [[-2,-1],[-2,1],[2,-1],[2,1],[-1,-2],[-1,2],[1,-2],[1,2]]) {
+        _tryAdd(col + dc, row + dr);
       }
     }
 
     return moves;
   }
 
+  // ═══════════════════════════════════════════════
   // 合法アクション一覧
+  // ═══════════════════════════════════════════════
   function getLegalActions(state, pIdx) {
-    const p = state.players[pIdx];
+    const p   = state.players[pIdx];
+    const ep  = state.players[1 - pIdx];
     const occ = buildOccupied(state);
     const actions = [];
 
-    // ボス移動
-    const bMoves = legalMovesForPiece(p.boss.col, p.boss.row, 'bear', p.boss.flip, occ, pIdx);
-    for (const m of bMoves) {
+    // ── 移動 ──────────────────────────────────────
+    // たいしょう
+    for (const m of legalMovesForPiece(p.boss.col, p.boss.row, 'bear', occ, pIdx, p))
       actions.push({ type: 'move', subtype: 'boss', col: m.col, row: m.row });
-    }
 
-    // フィールド駒移動
-    for (const f of p.field) {
-      const fMoves = legalMovesForPiece(f.col, f.row, f.id, f.flip, occ, pIdx);
-      for (const m of fMoves) {
+    // フィールド駒
+    for (const f of p.field)
+      for (const m of legalMovesForPiece(f.col, f.row, f.id, occ, pIdx, p))
         actions.push({ type: 'move', subtype: 'field', pieceId: f.id, col: m.col, row: m.row });
-      }
-    }
 
-    // 手札から配置
-    for (const h of p.hand) {
-      const myPieces = [p.boss, ...p.field];
+    // ── 配置 ──────────────────────────────────────
+    if (p.hand.length > 0) {
+      const myPieces = getAllPieces(p);
+      const epBoss   = ep.boss;
+
+      // 候補セル: 自分の駒に辺/角接触 かつ 空き
       const adjSet = new Set();
       for (const mp of myPieces) {
         for (const dir of ALL8) {
           const { col: nc, row: nr } = step(mp.col, mp.row, dir);
-          if (!inBounds(nc, nr)) continue;
-          if (occ.has(pk(nc, nr))) continue;
+          if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) continue;
           adjSet.add(pk(nc, nr));
         }
       }
-      const ep = state.players[1 - pIdx];
+
       for (const key of adjSet) {
         const [c, r] = key.split(',').map(Number);
-        if (Math.abs(c - ep.boss.col) <= 1 && Math.abs(r - ep.boss.row) <= 1) continue;
-        actions.push({ type: 'place', pieceId: h.id, col: c, row: r });
+
+        // 相手たいしょうの辺4マスには置けない
+        const dC = Math.abs(c - epBoss.col);
+        const dR = Math.abs(r - epBoss.row);
+        if ((dC === 0 && dR === 1) || (dC === 1 && dR === 0)) continue;
+
+        // 4×4 bounding box 制約
+        const afterPieces = [...myPieces, { col: c, row: r }];
+        if (!withinBBox(afterPieces)) continue;
+
+        for (const h of p.hand)
+          actions.push({ type: 'place', pieceId: h.id, col: c, row: r });
       }
     }
 
-    // フィールド駒を手持ちに戻す
+    // ── 戻す ──────────────────────────────────────
+    // 戻した後も残り全駒が連結である場合のみ
     for (const f of p.field) {
-      actions.push({ type: 'return', pieceId: f.id });
+      const after = getAllPieces(p).filter(q => !(q.col === f.col && q.row === f.row));
+      if (isConnected(after))
+        actions.push({ type: 'return', pieceId: f.id });
     }
 
     return actions;
   }
 
+  // ═══════════════════════════════════════════════
   // アクション適用
+  // ═══════════════════════════════════════════════
   function applyAction(state, pIdx, action) {
     const next = deepClone(state);
-    const p = next.players[pIdx];
+    const p  = next.players[pIdx];
     const ep = next.players[1 - pIdx];
 
     if (action.type === 'move') {
       if (action.subtype === 'boss') {
         _captureAt(ep, action.col, action.row);
-        p.boss.col = action.col;
-        p.boss.row = action.row;
+        p.boss.col = action.col; p.boss.row = action.row;
       } else {
         const f = p.field.find(x => x.id === action.pieceId);
         _captureAt(ep, action.col, action.row);
-        f.col = action.col;
-        f.row = action.row;
+        f.col = action.col; f.row = action.row;
       }
     }
 
     if (action.type === 'place') {
       const idx = p.hand.findIndex(h => h.id === action.pieceId);
       const piece = p.hand.splice(idx, 1)[0];
-      piece.col = action.col;
-      piece.row = action.row;
-      piece.flip = pIdx === 1;
+      piece.col = action.col; piece.row = action.row;
       p.field.push(piece);
     }
 
     if (action.type === 'return') {
       const idx = p.field.findIndex(f => f.id === action.pieceId);
       const piece = p.field.splice(idx, 1)[0];
-      delete piece.col; delete piece.row; delete piece.flip;
+      delete piece.col; delete piece.row;
       p.hand.push(piece);
       next.turn = 1 - pIdx;
       return next;
@@ -238,32 +273,29 @@ const Game = (() => {
     const idx = enemyPlayer.field.findIndex(f => f.col === col && f.row === row);
     if (idx !== -1) {
       const piece = enemyPlayer.field.splice(idx, 1)[0];
-      delete piece.col; delete piece.row; delete piece.flip;
+      delete piece.col; delete piece.row;
       enemyPlayer.hand.push(piece);
     }
   }
 
+  // 勝利条件: 相手たいしょうの上下左右4マスがすべて埋まった（
   function _checkWin(state, actorIdx) {
-    const ep = state.players[1 - actorIdx];
+    const ep  = state.players[1 - actorIdx];
     const occ = buildOccupied(state);
     let blocked = 0;
     for (const dir of ALL4_STRAIGHT) {
       const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
       if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
     }
-    if (blocked === 4) {
-      state.over = true;
-      state.winner = actorIdx;
-    }
+    if (blocked === 4) { state.over = true; state.winner = actorIdx; }
   }
 
-  function deepClone(state) {
-    return JSON.parse(JSON.stringify(state));
-  }
+  function deepClone(state) { return JSON.parse(JSON.stringify(state)); }
 
   return {
     createState, getLegalActions, applyAction,
-    buildOccupied, legalMovesForPiece, deepClone, pk, inBounds,
+    buildOccupied, legalMovesForPiece, getAllPieces, isConnected, withinBBox,
+    deepClone, pk, inBounds, step,
   };
 
 })();

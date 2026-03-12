@@ -1,9 +1,9 @@
 const UI = (() => {
 
-  let gameState   = null;
-  let myIndex     = -1;
-  let myTurn      = false;
-  let playerNames = ['', ''];
+  let gameState    = null;
+  let myIndex      = -1;
+  let myTurn       = false;
+  let playerNames  = ['', ''];
   let _gameStarted = false;
 
   let selected       = null;
@@ -11,6 +11,16 @@ const UI = (() => {
   let placeCells     = [];
 
   const canvas = document.getElementById('game-canvas');
+
+  // 駒の移動説明
+  const MOVE_DESC = {
+    bear:   '8方向1マス',
+    wolf:   '8方向1マス',
+    fox:    '上下左右1マス',
+    tanuki: '斜め1マス',
+    boar:   '上下左右∞マス',
+    rabbit: 'L字（飛越可）',
+  };
 
   function init() {
     Network.init();
@@ -35,9 +45,7 @@ const UI = (() => {
     history.replaceState(null, '', '?' + p.toString());
   }
 
-  function _clearUrl() {
-    history.replaceState(null, '', location.pathname);
-  }
+  function _clearUrl() { history.replaceState(null, '', location.pathname); }
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -52,7 +60,6 @@ const UI = (() => {
   }
 
   function _bindLobby() {
-
     document.getElementById('btn-create').addEventListener('click', async () => {
       const name = document.getElementById('input-name').value.trim();
       if (!name) { _flashErr('input-name', '名前を入力してください'); return; }
@@ -61,17 +68,14 @@ const UI = (() => {
       _setLoading('btn-create', true);
       try {
         const code = await Network.createRoom(name);
-        myIndex = 0;
-        _gameStarted = false;
+        myIndex = 0; _gameStarted = false;
         _setUrl(code);
         document.getElementById('room-code-display').textContent = code;
         showScreen('screen-waiting');
         setStatus('相手の参加を待っています…');
       } catch (e) {
         alert('ルーム作成失敗: ' + e.message);
-      } finally {
-        _setLoading('btn-create', false);
-      }
+      } finally { _setLoading('btn-create', false); }
     });
 
     document.getElementById('btn-join').addEventListener('click', async () => {
@@ -81,30 +85,19 @@ const UI = (() => {
       if (!code) { _flashErr('input-room-code', 'ルームコードを入力してください'); return; }
       playerNames[1] = name;
       localStorage.setItem('mt_player_name', name);
-      _setLoading('btn-join', true);
-      _setUrl(code);
-      try {
-        myIndex = await Network.joinRoom(code, name);
-      } catch (e) {
-        alert('参加失敗: ' + e.message);
-        _setLoading('btn-join', false);
-      }
+      _setLoading('btn-join', true); _setUrl(code);
+      try { myIndex = await Network.joinRoom(code, name); }
+      catch (e) { alert('参加失敗: ' + e.message); _setLoading('btn-join', false); }
     });
 
     document.getElementById('btn-spectate').addEventListener('click', async () => {
       const code = document.getElementById('input-room-code').value.trim();
       if (!code) { _flashErr('input-room-code', 'ルームコードを入力してください'); return; }
-      _setLoading('btn-spectate', true);
-      _setUrl(code);
+      _setLoading('btn-spectate', true); _setUrl(code);
       try {
         await Network.spectateRoom(code);
-        myIndex = -1;
-        showScreen('screen-waiting');
-        setStatus('観戦を待っています…');
-      } catch (e) {
-        alert('観戦失敗: ' + e.message);
-        _setLoading('btn-spectate', false);
-      }
+        myIndex = -1; showScreen('screen-waiting'); setStatus('観戦を待っています…');
+      } catch (e) { alert('観戦失敗: ' + e.message); _setLoading('btn-spectate', false); }
     });
 
     document.getElementById('btn-copy-code').addEventListener('click', () => {
@@ -127,8 +120,7 @@ const UI = (() => {
     });
 
     document.getElementById('btn-restart').addEventListener('click', () => {
-      Network.leave();
-      _clearUrl();
+      Network.leave(); _clearUrl();
       document.getElementById('result-overlay').classList.remove('show');
       gameState = null; myIndex = -1; selected = null;
       highlightCells = []; placeCells = [];
@@ -139,7 +131,6 @@ const UI = (() => {
   }
 
   function _bindNetwork() {
-
     Network.onOpponentJoined(async (opponentName, firstTurn) => {
       if (myIndex === 0) {
         if (_gameStarted) { await Network.sendRoomFull(); return; }
@@ -157,10 +148,8 @@ const UI = (() => {
     });
 
     Network.onForcedSpectate(() => {
-      myIndex = -1;
-      _setLoading('btn-join', false);
-      showScreen('screen-waiting');
-      setStatus('満員のため観戦モードに切り替えました…');
+      myIndex = -1; _setLoading('btn-join', false);
+      showScreen('screen-waiting'); setStatus('満員のため観戦モードに切り替えました…');
     });
 
     Network.onSpectatorJoined(() => {
@@ -169,8 +158,7 @@ const UI = (() => {
     });
 
     Network.onSpectateSync((state, nameA, nameB) => {
-      gameState = Game.deepClone(state);
-      myIndex = -1;
+      gameState = Game.deepClone(state); myIndex = -1;
       playerNames[0] = nameA; playerNames[1] = nameB;
       showScreen('screen-game');
       _redraw(); _updateInfo(); _updateStatus();
@@ -181,9 +169,7 @@ const UI = (() => {
 
     Network.onOpponentLeft(() => {
       if (myIndex === -1 || !gameState || gameState.over) return;
-      Network.leave();
-      _clearUrl();
-      _gameStarted = false;
+      Network.leave(); _clearUrl(); _gameStarted = false;
       document.getElementById('result-title').textContent = '相手が切断しました';
       document.getElementById('result-sub').textContent   = 'ロビーに戻ります';
       document.getElementById('result-overlay').classList.add('show');
@@ -195,20 +181,15 @@ const UI = (() => {
     myIndex   = Network.getMyIndex();
     selected  = null; highlightCells = []; placeCells = [];
     showScreen('screen-game');
-    _updateInfo();
-    _updateStatus();
-    _refreshHandPanel();
-    _redraw();
+    _updateInfo(); _updateStatus(); _refreshHandPanel(); _redraw();
   }
 
   function _bindCanvas() {
-
     canvas.addEventListener('click', e => {
       if (!gameState || !myTurn || gameState.over) return;
       const rect = canvas.getBoundingClientRect();
-      const sx = canvas.width  / rect.width;
-      const sy = canvas.height / rect.height;
-      const cell = Render.hitCell((e.clientX - rect.left)*sx, (e.clientY - rect.top)*sy);
+      const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+      const cell = Render.hitCell((e.clientX - rect.left)*sx, (e.clientY - rect.top)*sy, myIndex);
       if (cell) _onCellClick(cell.col, cell.row);
     });
 
@@ -217,9 +198,8 @@ const UI = (() => {
       if (!gameState || !myTurn || gameState.over) return;
       const t = e.touches[0];
       const rect = canvas.getBoundingClientRect();
-      const sx = canvas.width  / rect.width;
-      const sy = canvas.height / rect.height;
-      const cell = Render.hitCell((t.clientX - rect.left)*sx, (t.clientY - rect.top)*sy);
+      const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+      const cell = Render.hitCell((t.clientX - rect.left)*sx, (t.clientY - rect.top)*sy, myIndex);
       if (cell) _onCellClick(cell.col, cell.row);
     }, { passive: false });
   }
@@ -227,50 +207,41 @@ const UI = (() => {
   function _onCellClick(col, row) {
     const p   = gameState.players[myIndex];
     const occ = Game.buildOccupied(gameState);
-    const key = Game.pk(col, row);
-    const at  = occ.get(key);
+    const at  = occ.get(Game.pk(col, row));
 
-    // 配置先クリック（手札選択中）
+    // 手札選択中 → 配置先クリック
     if (selected && selected.type === 'hand') {
       if (placeCells.some(c => c.col === col && c.row === row)) {
-        _doAction({ type: 'place', pieceId: selected.id, col, row });
-        return;
+        _doAction({ type: 'place', pieceId: selected.id, col, row }); return;
       }
     }
 
-    // 移動先クリック（駒選択中）
+    // 駒選択中 → 移動先クリック
     if (selected && (selected.type === 'boss' || selected.type === 'field')) {
       if (highlightCells.some(c => c.col === col && c.row === row)) {
         const action = selected.type === 'boss'
           ? { type: 'move', subtype: 'boss', col, row }
           : { type: 'move', subtype: 'field', pieceId: selected.id, col, row };
-        _doAction(action);
-        return;
+        _doAction(action); return;
       }
     }
 
     // 自分の駒をクリック → 選択
     if (at && at.pIdx === myIndex) {
-      // *** バグ修正: ボスの pieceType は 'bear' ***
       const pieceType = at.type === 'boss' ? 'bear' : at.piece.id;
       const newSel = at.type === 'boss'
         ? { type: 'boss', pIdx: myIndex }
         : { type: 'field', pIdx: myIndex, id: at.piece.id };
 
-      // 同じ駒をクリック → 選択解除
       if (selected && selected.type === newSel.type && selected.id === newSel.id) {
         selected = null; highlightCells = []; placeCells = [];
       } else {
-        selected = newSel;
-        placeCells = [];
-        const flip = at.type === 'boss' ? p.boss.flip : at.piece.flip;
-        highlightCells = Game.legalMovesForPiece(col, row, pieceType, flip, occ, myIndex);
+        selected = newSel; placeCells = [];
+        highlightCells = Game.legalMovesForPiece(col, row, pieceType, occ, myIndex, p);
       }
-      _redraw();
-      return;
+      _redraw(); return;
     }
 
-    // 何もない / 相手の駒 → 選択解除
     selected = null; highlightCells = []; placeCells = [];
     _redraw();
   }
@@ -280,8 +251,7 @@ const UI = (() => {
     const actions = Game.getLegalActions(gameState, myIndex);
 
     if (selected && selected.type === 'hand' && selected.id === pieceId) {
-      selected = null; placeCells = []; highlightCells = [];
-      _redraw(); return;
+      selected = null; placeCells = []; highlightCells = []; _redraw(); return;
     }
 
     selected = { type: 'hand', pIdx: myIndex, id: pieceId };
@@ -289,8 +259,7 @@ const UI = (() => {
     placeCells = actions
       .filter(a => a.type === 'place' && a.pieceId === pieceId)
       .map(a => ({ col: a.col, row: a.row }));
-    _redraw();
-    _refreshHandPanel();
+    _redraw(); _refreshHandPanel();
   }
 
   function onReturnPiece(pieceId) {
@@ -314,10 +283,7 @@ const UI = (() => {
   }
 
   function _afterAction() {
-    _updateInfo();
-    _updateStatus();
-    _refreshHandPanel();
-    _redraw();
+    _updateInfo(); _updateStatus(); _refreshHandPanel(); _redraw();
     if (gameState.over) _showResult();
   }
 
@@ -328,10 +294,9 @@ const UI = (() => {
 
   function _updateInfo() {
     if (!gameState) return;
-    const p0 = gameState.players[0];
-    const p1 = gameState.players[1];
-    document.getElementById('sente-name').textContent  = p0.name || '---';
-    document.getElementById('gote-name').textContent   = p1.name || '---';
+    const p0 = gameState.players[0], p1 = gameState.players[1];
+    document.getElementById('sente-name').textContent        = p0.name || '---';
+    document.getElementById('gote-name').textContent         = p1.name || '---';
     document.getElementById('sente-hand-count').textContent  = p0.hand.length;
     document.getElementById('gote-hand-count').textContent   = p1.hand.length;
     document.getElementById('sente-field-count').textContent = p0.field.length;
@@ -362,13 +327,18 @@ const UI = (() => {
       if (!panel) continue;
       panel.innerHTML = '';
 
+      // 手札
       for (const piece of p.hand) {
         const btn = document.createElement('button');
         btn.className = 'hand-card';
         const isSel = selected && selected.type === 'hand' && selected.id === piece.id && i === myIndex;
         if (isSel) btn.classList.add('selected');
         btn.style.borderColor = color;
-        btn.innerHTML = `<span class="card-emoji">${piece.emoji}</span><span class="card-name">${piece.name}</span>`;
+        const desc = MOVE_DESC[piece.id] || '';
+        btn.innerHTML = `
+          <span class="card-emoji">${piece.emoji}</span>
+          <span class="card-name">${piece.name}</span>
+          <span class="card-move">${desc}</span>`;
         if (isMe && myTurn && !gameState.over) {
           btn.addEventListener('click', () => onHandCardClick(piece.id));
         } else {
@@ -377,11 +347,17 @@ const UI = (() => {
         panel.appendChild(btn);
       }
 
+      // 盤上の駒
       for (const f of p.field) {
         const btn = document.createElement('button');
         btn.className = 'hand-card hand-card--field';
         btn.style.borderColor = color;
-        btn.innerHTML = `<span class="card-emoji">${f.emoji}</span><span class="card-name">${f.name}<br><small>盤上</small></span>`;
+        const desc = MOVE_DESC[f.id] || '';
+        btn.innerHTML = `
+          <span class="card-emoji">${f.emoji}</span>
+          <span class="card-name">${f.name}</span>
+          <span class="card-move">${desc}</span>
+          <span class="card-field-badge">盤上</span>`;
         if (isMe && myTurn && !gameState.over) {
           btn.addEventListener('click', () => onReturnPiece(f.id));
           btn.title = '手持ちに戻す';
@@ -405,7 +381,6 @@ const UI = (() => {
     const wName = gameState.players[w].name || `Player ${w}`;
     const isMe  = w === myIndex;
     const isSp  = myIndex === -1;
-
     if (isSp) {
       document.getElementById('result-title').textContent = wName;
       document.getElementById('result-sub').textContent   = 'の勝利！';
@@ -418,8 +393,7 @@ const UI = (() => {
 
   function _flashErr(id, msg) {
     const el = document.getElementById(id);
-    el.placeholder = msg;
-    el.classList.add('input-error');
+    el.placeholder = msg; el.classList.add('input-error');
     setTimeout(() => { el.placeholder = ''; el.classList.remove('input-error'); }, 2000);
   }
 
