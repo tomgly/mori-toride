@@ -451,7 +451,17 @@ input::placeholder { color: var(--dim2); }
 }
 
 .hand-card--field {
-  opacity: 0.75;
+  background: #f0f0f0;
+  border-color: #bbb !important;
+  opacity: 0.85;
+}
+
+.hand-card--field .card-emoji {
+  filter: grayscale(40%);
+}
+
+.hand-card--field .card-name {
+  color: #888;
 }
 
 .card-emoji { font-size: 1.3rem; line-height: 1; }

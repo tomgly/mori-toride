@@ -75,7 +75,7 @@ const Game = (() => {
            (Math.max(...rows) - Math.min(...rows) < 4);
   }
 
-  // いずれかの駒と辺/角接触しているか
+  // いずれかの駒（自分・相手問わず）と辺/角接触しているか
   function touchesAny(col, row, occupied, excludeKey) {
     for (const dir of ALL8) {
       const nb = step(col, row, dir);
@@ -89,13 +89,14 @@ const Game = (() => {
   function legalMovesForPiece(col, row, pieceType, occupied, pIdx, player) {
     const moves = [];
 
-    // たいしょう: 自由に8方向1マスし
+    // たいしょう: 自由に8方向1マス
     if (pieceType === 'bear') {
       for (const dir of ALL8) {
         const { col: nc, row: nr } = step(col, row, dir);
         if (!inBounds(nc, nr)) continue;
         const who = occupied.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue; // 味方マス不可
+        if (who && who.pIdx === pIdx) continue;   // 味方マス不可
+        if (who && who.type === 'boss') continue;  // 相手ボス不可
         moves.push({ col: nc, row: nr });
       }
       return moves;
@@ -107,7 +108,8 @@ const Game = (() => {
     const _tryAdd = (nc, nr) => {
       if (!inBounds(nc, nr)) return;
       const who = occupied.get(pk(nc, nr));
-      if (who && who.pIdx === pIdx) return; // 味方マス不可
+      if (who && who.pIdx === pIdx) return;       // 味方マス不可
+      if (who && who.type === 'boss') return;      // 相手ボス不可（乗れない）
 
       // 移動後の自駒リスト
       const afterPieces = [...myPiecesWithout, { col: nc, row: nr }];
@@ -115,10 +117,9 @@ const Game = (() => {
       // 連結維持チェック
       if (!isConnected(afterPieces)) return;
 
-      // 移動後に駒と接触しているか
       const occAfter = new Map(occupied);
-      occAfter.delete(pk(col, row));   // 移動元を消す
-      if (who) occAfter.set(pk(nc, nr), who); // 行先に敵がいる場合はそのまま（取る）
+      occAfter.delete(pk(col, row));
+      occAfter.delete(pk(nc, nr));  // 敵駒を取る場合も除く
       if (!touchesAny(nc, nr, occAfter, pk(nc, nr))) return;
 
       moves.push({ col: nc, row: nr });
@@ -278,7 +279,7 @@ const Game = (() => {
     }
   }
 
-  // 勝利条件: 相手たいしょうの上下左右4マスがすべて埋まった（
+  // 勝利条件: 相手たいしょうの上下左右4マスがすべて埋まった
   function _checkWin(state, actorIdx) {
     const ep  = state.players[1 - actorIdx];
     const occ = buildOccupied(state);

@@ -299,8 +299,8 @@ const UI = (() => {
     document.getElementById('gote-name').textContent         = p1.name || '---';
     document.getElementById('sente-hand-count').textContent  = p0.hand.length;
     document.getElementById('gote-hand-count').textContent   = p1.hand.length;
-    document.getElementById('sente-field-count').textContent = p0.field.length;
-    document.getElementById('gote-field-count').textContent  = p1.field.length;
+    document.getElementById('sente-field-count').textContent = p0.field.length + 1; // +1 for boss
+    document.getElementById('gote-field-count').textContent  = p1.field.length + 1; // +1 for boss
     document.getElementById('sente-panel').classList.toggle('panel-active', gameState.turn === 0);
     document.getElementById('gote-panel').classList.toggle('panel-active',  gameState.turn === 1);
   }
@@ -318,11 +318,26 @@ const UI = (() => {
 
   function _refreshHandPanel() {
     if (!gameState) return;
-    for (let i = 0; i < 2; i++) {
-      const isMe  = i === myIndex;
-      const p     = gameState.players[i];
-      const color = i === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
-      const panelId = i === 0 ? 'hand-p0' : 'hand-p1';
+
+    // 自分のプレイヤーindex
+    const meIdx  = myIndex === -1 ? 0 : myIndex;
+    const oppIdx = 1 - meIdx;
+
+    // hand-p0 = 右パネル = 自分、hand-p1 = 左パネル = 相手
+    const assignments = [
+      { panelId: 'hand-p0', pIdx: meIdx,  isMe: myIndex !== -1 },
+      { panelId: 'hand-p1', pIdx: oppIdx, isMe: false },
+    ];
+
+    // ラベルも正しく設定
+    const rightLabel = document.getElementById('hand-label-right');
+    const leftLabel  = document.getElementById('hand-label-left');
+    if (rightLabel) rightLabel.textContent = myIndex === -1 ? '先手の手札' : 'あなたの手札';
+    if (leftLabel)  leftLabel.textContent  = myIndex === -1 ? '後手の手札' : '相手の手札';
+
+    for (const { panelId, pIdx, isMe } of assignments) {
+      const p     = gameState.players[pIdx];
+      const color = pIdx === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
       const panel = document.getElementById(panelId);
       if (!panel) continue;
       panel.innerHTML = '';
@@ -331,7 +346,7 @@ const UI = (() => {
       for (const piece of p.hand) {
         const btn = document.createElement('button');
         btn.className = 'hand-card';
-        const isSel = selected && selected.type === 'hand' && selected.id === piece.id && i === myIndex;
+        const isSel = selected && selected.type === 'hand' && selected.id === piece.id && pIdx === myIndex;
         if (isSel) btn.classList.add('selected');
         btn.style.borderColor = color;
         const desc = MOVE_DESC[piece.id] || '';
@@ -351,7 +366,6 @@ const UI = (() => {
       for (const f of p.field) {
         const btn = document.createElement('button');
         btn.className = 'hand-card hand-card--field';
-        btn.style.borderColor = color;
         const desc = MOVE_DESC[f.id] || '';
         btn.innerHTML = `
           <span class="card-emoji">${f.emoji}</span>
