@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>もりのとりで</title>
+
+<!-- ファビコン -->
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon-512.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<!-- OGP -->
+<meta property="og:title" content="もりのとりで">
+<meta property="og:description" content="森の動物たちのコマ戦略ゲーム — オンライン対戦">
+<meta property="og:image" content="https://mori-toride.tomsan.site/ogp.png">
+<meta property="og:url" content="https://mori-toride.tomsan.site/">
+<meta property="og:type" content="website">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://mori-toride.tomsan.site/ogp.png">
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=M+PLUS+Rounded+1c:wght@300;400;700&display=swap" rel="stylesheet">
+
+<!-- CSS -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- タイトルバー -->
+<header>
+  <div class="title-bar">
+    <div class="logo">もりのとりで</div>
+    <div class="ver-tag">v1.0 // ONLINE</div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════
+     ロビー画面
+══════════════════════════════════════════════ -->
+<div class="screen active" id="screen-lobby">
+  <div class="lobby-hero">
+    <div class="lobby-title">もりのとりで</div>
+    <div class="lobby-animals">🐻🐺🦊🦝🐗🐰</div>
+    <div class="lobby-sub">森の動物たちのコマ戦略ゲーム</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">プレイヤー名</div>
+    <input type="text" id="input-name" maxlength="16" placeholder="名前を入力…" autocomplete="off">
+  </div>
+
+  <div class="card">
+    <div class="card-title">新規ルーム</div>
+    <p class="text-dim">新しいルームを作成してコードを相手に共有します。</p>
+    <button class="btn btn-pink" id="btn-create">ルームを作成</button>
+  </div>
+
+  <div class="divider">または</div>
+
+  <div class="card">
+    <div class="card-title">ルームに参加 / 観戦</div>
+    <input type="text" id="input-room-code" maxlength="6" placeholder="ルームコード（例: AB3K7Z）"
+      autocomplete="off" style="text-transform:uppercase;letter-spacing:0.25em;font-size:1rem">
+    <div class="btn-row">
+      <button class="btn btn-mint" id="btn-join">参加する</button>
+      <button class="btn btn-yel" id="btn-spectate">観戦する</button>
+    </div>
+    <p class="text-dim" style="margin-top:8px;font-size:0.65rem">※ 観戦は名前不要です</p>
+  </div>
+
+  <div class="card" style="margin-bottom:40px">
+    <div class="card-title">ゲームルール</div>
+    <div class="rule-list">
+      <div class="rule-item">• <strong>たいしょう</strong>を囲まれたら負け</div>
+      <div class="rule-item">• 隣接するマスに手札から駒を配置できる</div>
+      <div class="rule-item">• 盤上の駒を手持ちに戻すこともできる</div>
+      <div class="rule-item">• 相手ボスの隣には直接配置不可</div>
+      <div class="rule-item">• 1ターンに「<strong>置く</strong>」「<strong>動かす</strong>」「<strong>戻す</strong>」のどれかのみ</div>
+      <div class="rule-item">• パスは敗北！</div>
+    </div>
+
+    <div class="piece-legend">
+      <div class="legend-title">駒の動き</div>
+      <div class="legend-grid">
+        <div class="legend-item"><span>🐻</span><span class="l-name">たいしょう</span><span class="l-move">8方向1マス</span></div>
+        <div class="legend-item"><span>🐺</span><span class="l-name">おおかみ</span><span class="l-move">8方向1マス</span></div>
+        <div class="legend-item"><span>🦊</span><span class="l-name">きつね</span><span class="l-move">上下左右1マス</span></div>
+        <div class="legend-item"><span>🦝</span><span class="l-name">たぬき</span><span class="l-move">斜め1マス</span></div>
+        <div class="legend-item"><span>🐗</span><span class="l-name">いのしし</span><span class="l-move">上下左右∞マス</span></div>
+        <div class="legend-item"><span>🐰</span><span class="l-name">うさぎ</span><span class="l-move">L字3マス（飛越可）</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     待機画面
+══════════════════════════════════════════════ -->
+<div class="screen" id="screen-waiting">
+
+  <div class="waiting-icon">🌿</div>
+
+  <div class="card" style="text-align:center">
+    <div class="card-title" style="justify-content:center">ルームコード</div>
+    <div class="code-display" id="room-code-display">------</div>
+    <p class="text-dim" style="margin:8px 0">このコードを相手に共有してください</p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-ghost btn-sm" id="btn-copy-code">コードをコピー</button>
+      <button class="btn btn-ghost btn-sm" id="btn-copy-link">リンクをコピー</button>
+    </div>
+  </div>
+  
+  <div class="waiting-dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    <span id="waiting-status-text">相手の参加を待っています</span>
+  </div>
+  <button class="btn btn-ghost" id="btn-cancel-wait"
+    onclick="Network.leave(); history.replaceState(null,'',location.pathname); document.getElementById('screen-waiting').classList.remove('active'); document.getElementById('screen-lobby').classList.add('active');">
+    キャンセル
+  </button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     ゲーム画面
+══════════════════════════════════════════════ -->
+<div class="screen" id="screen-game">
+
+  <!-- 後手プレイヤー -->
+  <div class="player-bar player-bar--top" id="gote-panel">
+    <div class="pb-info">
+      <div class="pb-badge" id="gote-label">後手</div>
+      <div class="pb-name" id="gote-name">---</div>
+    </div>
+    <div class="pb-counts">
+      <span>手札 <strong id="gote-hand-count">5</strong></span>
+      <span>盤上 <strong id="gote-field-count">0</strong></span>
+    </div>
+  </div>
+
+  <!-- ゲームエリア -->
+  <div class="game-area">
+
+    <!-- 左手札 -->
+    <div class="hand-panel hand-panel--left" id="hand-panel-left">
+      <div class="hand-label" id="hand-label-left">相手の手札</div>
+      <div class="hand-cards" id="hand-p1"></div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+    </div>
+
+    <!-- 右手札 -->
+    <div class="hand-panel hand-panel--right" id="hand-panel-right">
+      <div class="hand-label" id="hand-label-right">あなたの手札</div>
+      <div class="hand-cards" id="hand-p0"></div>
+    </div>
+
+  </div>
+
+  <!-- スマホ用手札 -->
+  <div class="hand-panel-mobile">
+    <div class="hand-mobile-row">
+      <div class="hm-label">相手</div>
+      <div class="hand-cards hand-cards--mobile" id="hand-p1-mobile"></div>
+    </div>
+    <div class="hand-mobile-row">
+      <div class="hm-label">あなた</div>
+      <div class="hand-cards hand-cards--mobile" id="hand-p0-mobile"></div>
+    </div>
+  </div>
+
+  <!-- 先手プレイヤー -->
+  <div class="player-bar player-bar--bottom" id="sente-panel">
+    <div class="pb-info">
+      <div class="pb-badge" id="sente-label">先手</div>
+      <div class="pb-name" id="sente-name">---</div>
+    </div>
+    <div class="pb-counts">
+      <span>手札 <strong id="sente-hand-count">5</strong></span>
+      <span>盤上 <strong id="sente-field-count">0</strong></span>
+    </div>
+  </div>
+
+  <!-- ステータス -->
+  <div class="status-bar">
+    <span id="status-text">接続中…</span>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     結果オーバーレイ
+══════════════════════════════════════════════ -->
+<div id="result-overlay">
+  <div class="result-box">
+    <div class="result-animals">🎊</div>
+    <div class="result-title" id="result-title">勝利！</div>
+    <div class="result-sub" id="result-sub">おめでとうございます</div>
+    <button class="btn btn-pink" id="btn-restart">ロビーに戻る</button>
+  </div>
+</div>
+
+<!-- ── JS読み込み ────────────────────── -->
+<script src="js/config.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/network.js"></script>
+<script src="js/ui.js"></script>
+
+</body>
+</html>
