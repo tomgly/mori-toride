@@ -6,14 +6,12 @@ const UI = (() => {
   let playerNames = ['', ''];
   let _gameStarted = false;
 
-  // 選択状態
-  let selected = null;  // { type:'boss'|'field'|'hand', pIdx, id? }
+  let selected       = null;
   let highlightCells = [];
   let placeCells     = [];
 
   const canvas = document.getElementById('game-canvas');
 
-  // 初期化
   function init() {
     Network.init();
     Render.init(canvas);
@@ -41,7 +39,6 @@ const UI = (() => {
     history.replaceState(null, '', location.pathname);
   }
 
-  // 画面切替
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -54,7 +51,6 @@ const UI = (() => {
     if (ws) ws.textContent = html;
   }
 
-  // ロビーイベント
   function _bindLobby() {
 
     document.getElementById('btn-create').addEventListener('click', async () => {
@@ -142,15 +138,11 @@ const UI = (() => {
     });
   }
 
-  // ネットワークイベント
   function _bindNetwork() {
 
     Network.onOpponentJoined(async (opponentName, firstTurn) => {
       if (myIndex === 0) {
-        if (_gameStarted) {
-          await Network.sendRoomFull();
-          return;
-        }
+        if (_gameStarted) { await Network.sendRoomFull(); return; }
         playerNames[1] = opponentName;
         const ft = Math.random() < 0.5 ? 0 : 1;
         await Network.ackJoin(playerNames[0], ft);
@@ -198,7 +190,6 @@ const UI = (() => {
     });
   }
 
-  // ゲーム開始
   function _startGame(nameA, nameB, firstTurn = 0) {
     gameState = Game.createState(nameA, nameB, firstTurn);
     myIndex   = Network.getMyIndex();
@@ -210,7 +201,6 @@ const UI = (() => {
     _redraw();
   }
 
-  // Canvasイベント
   function _bindCanvas() {
 
     canvas.addEventListener('click', e => {
@@ -218,9 +208,7 @@ const UI = (() => {
       const rect = canvas.getBoundingClientRect();
       const sx = canvas.width  / rect.width;
       const sy = canvas.height / rect.height;
-      const cx = (e.clientX - rect.left) * sx;
-      const cy = (e.clientY - rect.top)  * sy;
-      const cell = Render.hitCell(cx, cy);
+      const cell = Render.hitCell((e.clientX - rect.left)*sx, (e.clientY - rect.top)*sy);
       if (cell) _onCellClick(cell.col, cell.row);
     });
 
@@ -231,24 +219,20 @@ const UI = (() => {
       const rect = canvas.getBoundingClientRect();
       const sx = canvas.width  / rect.width;
       const sy = canvas.height / rect.height;
-      const cx = (t.clientX - rect.left) * sx;
-      const cy = (t.clientY - rect.top)  * sy;
-      const cell = Render.hitCell(cx, cy);
+      const cell = Render.hitCell((t.clientX - rect.left)*sx, (t.clientY - rect.top)*sy);
       if (cell) _onCellClick(cell.col, cell.row);
     }, { passive: false });
   }
 
-  // セルクリック処理
   function _onCellClick(col, row) {
-    const p = gameState.players[myIndex];
+    const p   = gameState.players[myIndex];
     const occ = Game.buildOccupied(gameState);
     const key = Game.pk(col, row);
     const at  = occ.get(key);
 
     // 配置先クリック（手札選択中）
     if (selected && selected.type === 'hand') {
-      const isPlace = placeCells.some(c => c.col === col && c.row === row);
-      if (isPlace) {
+      if (placeCells.some(c => c.col === col && c.row === row)) {
         _doAction({ type: 'place', pieceId: selected.id, col, row });
         return;
       }
@@ -256,8 +240,7 @@ const UI = (() => {
 
     // 移動先クリック（駒選択中）
     if (selected && (selected.type === 'boss' || selected.type === 'field')) {
-      const isMove = highlightCells.some(c => c.col === col && c.row === row);
-      if (isMove) {
+      if (highlightCells.some(c => c.col === col && c.row === row)) {
         const action = selected.type === 'boss'
           ? { type: 'move', subtype: 'boss', col, row }
           : { type: 'move', subtype: 'field', pieceId: selected.id, col, row };
@@ -268,7 +251,8 @@ const UI = (() => {
 
     // 自分の駒をクリック → 選択
     if (at && at.pIdx === myIndex) {
-      const pieceType = at.type === 'boss' ? 'boss' : at.piece.id;
+      // *** バグ修正: ボスの pieceType は 'bear' ***
+      const pieceType = at.type === 'boss' ? 'bear' : at.piece.id;
       const newSel = at.type === 'boss'
         ? { type: 'boss', pIdx: myIndex }
         : { type: 'field', pIdx: myIndex, id: at.piece.id };
@@ -279,7 +263,6 @@ const UI = (() => {
       } else {
         selected = newSel;
         placeCells = [];
-        // 合法移動先を計算
         const flip = at.type === 'boss' ? p.boss.flip : at.piece.flip;
         highlightCells = Game.legalMovesForPiece(col, row, pieceType, flip, occ, myIndex);
       }
@@ -287,40 +270,34 @@ const UI = (() => {
       return;
     }
 
-    // 何もない/相手の駒 → 選択解除
+    // 何もない / 相手の駒 → 選択解除
     selected = null; highlightCells = []; placeCells = [];
     _redraw();
   }
 
-  // 手札カードクリック（HTMLボタン）
   function onHandCardClick(pieceId) {
     if (!myTurn || !gameState || gameState.over) return;
-    const p = gameState.players[myIndex];
     const actions = Game.getLegalActions(gameState, myIndex);
 
-    // 同じカード → 選択解除
     if (selected && selected.type === 'hand' && selected.id === pieceId) {
       selected = null; placeCells = []; highlightCells = [];
-      _redraw();
-      return;
+      _redraw(); return;
     }
 
     selected = { type: 'hand', pIdx: myIndex, id: pieceId };
     highlightCells = [];
-    // 配置先を収集
-    const placeActions = actions.filter(a => a.type === 'place' && a.pieceId === pieceId);
-    placeCells = placeActions.map(a => ({ col: a.col, row: a.row }));
+    placeCells = actions
+      .filter(a => a.type === 'place' && a.pieceId === pieceId)
+      .map(a => ({ col: a.col, row: a.row }));
     _redraw();
     _refreshHandPanel();
   }
 
-  // フィールド駒を手持ちに戻す
   function onReturnPiece(pieceId) {
     if (!myTurn || !gameState || gameState.over) return;
     _doAction({ type: 'return', pieceId });
   }
 
-  // アクション実行
   function _doAction(action) {
     gameState = Game.applyAction(gameState, myIndex, action);
     Network.sendAction(action);
@@ -328,7 +305,6 @@ const UI = (() => {
     _afterAction();
   }
 
-  // リモートアクション受信
   function _applyRemote(action) {
     if (!gameState || gameState.over) return;
     const actorIdx = myIndex === -1 ? gameState.turn : 1 - myIndex;
@@ -337,7 +313,6 @@ const UI = (() => {
     _afterAction();
   }
 
-  // アクション後
   function _afterAction() {
     _updateInfo();
     _updateStatus();
@@ -346,29 +321,21 @@ const UI = (() => {
     if (gameState.over) _showResult();
   }
 
-  // Canvas再描画
   function _redraw() {
     if (!gameState) return;
-    Render.draw(gameState, myIndex, {
-      highlightCells,
-      placeCells,
-      selectedPiece: selected,
-    });
+    Render.draw(gameState, myIndex, { highlightCells, placeCells, selectedPiece: selected });
   }
 
-  // プレイヤー情報更新
   function _updateInfo() {
     if (!gameState) return;
     const p0 = gameState.players[0];
     const p1 = gameState.players[1];
-
-    document.getElementById('sente-name').textContent = p0.name || '---';
-    document.getElementById('gote-name').textContent  = p1.name || '---';
-    document.getElementById('sente-hand-count').textContent = p0.hand.length;
-    document.getElementById('gote-hand-count').textContent  = p1.hand.length;
+    document.getElementById('sente-name').textContent  = p0.name || '---';
+    document.getElementById('gote-name').textContent   = p1.name || '---';
+    document.getElementById('sente-hand-count').textContent  = p0.hand.length;
+    document.getElementById('gote-hand-count').textContent   = p1.hand.length;
     document.getElementById('sente-field-count').textContent = p0.field.length;
     document.getElementById('gote-field-count').textContent  = p1.field.length;
-
     document.getElementById('sente-panel').classList.toggle('panel-active', gameState.turn === 0);
     document.getElementById('gote-panel').classList.toggle('panel-active',  gameState.turn === 1);
   }
@@ -384,19 +351,17 @@ const UI = (() => {
     }
   }
 
-  // 手札パネル更新
   function _refreshHandPanel() {
     if (!gameState) return;
     for (let i = 0; i < 2; i++) {
-      const isMe = i === myIndex;
-      const p = gameState.players[i];
+      const isMe  = i === myIndex;
+      const p     = gameState.players[i];
       const color = i === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
       const panelId = i === 0 ? 'hand-p0' : 'hand-p1';
       const panel = document.getElementById(panelId);
       if (!panel) continue;
       panel.innerHTML = '';
 
-      // 手札
       for (const piece of p.hand) {
         const btn = document.createElement('button');
         btn.className = 'hand-card';
@@ -412,7 +377,6 @@ const UI = (() => {
         panel.appendChild(btn);
       }
 
-      // フィールド駒（「戻す」ボタン付き）
       for (const f of p.field) {
         const btn = document.createElement('button');
         btn.className = 'hand-card hand-card--field';
@@ -430,15 +394,14 @@ const UI = (() => {
       if (panel.children.length === 0) {
         panel.innerHTML = '<div class="hand-empty">手札なし</div>';
       }
-      // スマホ用パネルへ同期
+
       const mob = document.getElementById(panelId + '-mobile');
       if (mob) mob.innerHTML = panel.innerHTML;
     }
   }
 
-  // 結果オーバーレイ
   function _showResult() {
-    const w = gameState.winner;
+    const w     = gameState.winner;
     const wName = gameState.players[w].name || `Player ${w}`;
     const isMe  = w === myIndex;
     const isSp  = myIndex === -1;
