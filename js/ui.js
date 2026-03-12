@@ -1,235 +1,474 @@
-const Render = (() => {
+const UI = (() => {
 
-  let canvas, ctx, W, H;
+  let gameState   = null;
+  let myIndex     = -1;
+  let myTurn      = false;
+  let playerNames = ['', ''];
+  let _gameStarted = false;
 
-  function init(el) {
-    canvas = el;
-    resize();
-    window.addEventListener('resize', resize);
+  // 選択状態
+  let selected = null;  // { type:'boss'|'field'|'hand', pIdx, id? }
+  let highlightCells = [];
+  let placeCells     = [];
+
+  const canvas = document.getElementById('game-canvas');
+
+  // 初期化
+  function init() {
+    Network.init();
+    Render.init(canvas);
+    const saved = localStorage.getItem('mt_player_name');
+    if (saved) document.getElementById('input-name').value = saved;
+    _bindLobby();
+    _bindCanvas();
+    _bindNetwork();
+    _applyUrl();
   }
 
-  function resize() {
-    const { COLS, ROWS, CELL, PAD } = CFG;
-    W = COLS * CELL + PAD * 2;
-    H = ROWS * CELL + PAD * 2;
-    canvas.width  = W;
-    canvas.height = H;
-    ctx = canvas.getContext('2d');
-    fitCanvas();
+  function _applyUrl() {
+    const code = new URLSearchParams(location.search).get('code');
+    if (code) document.getElementById('input-room-code').value = code.toUpperCase();
+    showScreen('screen-lobby');
   }
 
-  function fitCanvas() {
-    const { COLS, ROWS, CELL, PAD } = CFG;
-    const rawW = COLS * CELL + PAD * 2;
-    const rawH = ROWS * CELL + PAD * 2;
-    // ゲーム画面の使えるサイズを推定
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const isDesktop = vw >= 768;
-
-    let maxW, maxH;
-    if (isDesktop) {
-      maxW = Math.min(vw * 0.55, 520);
-      maxH = Math.min(vh - 160, 700);
-    } else {
-      maxW = vw - 32;
-      maxH = vh * 0.52;
-    }
-    const scale = Math.min(maxW / rawW, maxH / rawH, 1);
-    canvas.style.width  = (rawW * scale) + 'px';
-    canvas.style.height = (rawH * scale) + 'px';
+  function _setUrl(code) {
+    const p = new URLSearchParams();
+    if (code) p.set('code', code);
+    history.replaceState(null, '', '?' + p.toString());
   }
 
-  // セル中心座標
-  function cellCenter(col, row) {
-    return {
-      x: CFG.PAD + col * CFG.CELL + CFG.CELL / 2,
-      y: CFG.PAD + row * CFG.CELL + CFG.CELL / 2,
-    };
+  function _clearUrl() {
+    history.replaceState(null, '', location.pathname);
   }
 
-  // canvas座標 → セル
-  function hitCell(cx, cy) {
-    const { PAD, CELL, COLS, ROWS } = CFG;
-    const col = Math.floor((cx - PAD) / CELL);
-    const row = Math.floor((cy - PAD) / CELL);
-    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
-    return { col, row };
+  // 画面切替
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.body.classList.toggle('game-active', id === 'screen-game');
   }
 
-  // メイン描画
-  function draw(state, myIndex, ui) {
-    if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    _drawBg();
-    if (ui.highlightCells)  _drawHighlights(ui.highlightCells, myIndex, state);
-    if (ui.placeCells)      _drawPlaceHighlights(ui.placeCells, myIndex, state);
-    _drawPieces(state, myIndex, ui);
+  function setStatus(html) {
+    document.getElementById('status-text').innerHTML = html;
+    const ws = document.getElementById('waiting-status-text');
+    if (ws) ws.textContent = html;
   }
 
-  // 背景
-  function _drawBg() {
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0,   '#fff0f8');
-    grad.addColorStop(0.5, '#f5faff');
-    grad.addColorStop(1,   '#fff0f8');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+  // ロビーイベント
+  function _bindLobby() {
+
+    document.getElementById('btn-create').addEventListener('click', async () => {
+      const name = document.getElementById('input-name').value.trim();
+      if (!name) { _flashErr('input-name', '名前を入力してください'); return; }
+      playerNames[0] = name;
+      localStorage.setItem('mt_player_name', name);
+      _setLoading('btn-create', true);
+      try {
+        const code = await Network.createRoom(name);
+        myIndex = 0;
+        _gameStarted = false;
+        _setUrl(code);
+        document.getElementById('room-code-display').textContent = code;
+        showScreen('screen-waiting');
+        setStatus('相手の参加を待っています…');
+      } catch (e) {
+        alert('ルーム作成失敗: ' + e.message);
+      } finally {
+        _setLoading('btn-create', false);
+      }
+    });
+
+    document.getElementById('btn-join').addEventListener('click', async () => {
+      const name = document.getElementById('input-name').value.trim();
+      const code = document.getElementById('input-room-code').value.trim();
+      if (!name) { _flashErr('input-name', '名前を入力してください'); return; }
+      if (!code) { _flashErr('input-room-code', 'ルームコードを入力してください'); return; }
+      playerNames[1] = name;
+      localStorage.setItem('mt_player_name', name);
+      _setLoading('btn-join', true);
+      _setUrl(code);
+      try {
+        myIndex = await Network.joinRoom(code, name);
+      } catch (e) {
+        alert('参加失敗: ' + e.message);
+        _setLoading('btn-join', false);
+      }
+    });
+
+    document.getElementById('btn-spectate').addEventListener('click', async () => {
+      const code = document.getElementById('input-room-code').value.trim();
+      if (!code) { _flashErr('input-room-code', 'ルームコードを入力してください'); return; }
+      _setLoading('btn-spectate', true);
+      _setUrl(code);
+      try {
+        await Network.spectateRoom(code);
+        myIndex = -1;
+        showScreen('screen-waiting');
+        setStatus('観戦を待っています…');
+      } catch (e) {
+        alert('観戦失敗: ' + e.message);
+        _setLoading('btn-spectate', false);
+      }
+    });
+
+    document.getElementById('btn-copy-code').addEventListener('click', () => {
+      const code = document.getElementById('room-code-display').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const b = document.getElementById('btn-copy-code');
+        b.textContent = 'コピーしました！';
+        setTimeout(() => b.textContent = 'コードをコピー', 2000);
+      });
+    });
+
+    document.getElementById('btn-copy-link').addEventListener('click', () => {
+      const code = document.getElementById('room-code-display').textContent;
+      const url  = `${location.origin}${location.pathname}?code=${code}`;
+      navigator.clipboard.writeText(url).then(() => {
+        const b = document.getElementById('btn-copy-link');
+        b.textContent = 'コピーしました！';
+        setTimeout(() => b.textContent = 'リンクをコピー', 2000);
+      });
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      Network.leave();
+      _clearUrl();
+      document.getElementById('result-overlay').classList.remove('show');
+      gameState = null; myIndex = -1; selected = null;
+      highlightCells = []; placeCells = [];
+      playerNames = ['', '']; _gameStarted = false;
+      document.getElementById('input-room-code').value = '';
+      showScreen('screen-lobby');
+    });
   }
 
-  // 移動ハイライト
-  function _drawHighlights(cells, myIndex, state) {
-    const { CELL, PAD } = CFG;
-    const color = myIndex === 0 ? CFG.HIGHLIGHT_SENTE : CFG.HIGHLIGHT_GOTE;
-    const border = myIndex === 0 ? CFG.HL_BORDER_SENTE : CFG.HL_BORDER_GOTE;
-    for (const { col, row } of cells) {
-      const x = PAD + col * CELL;
-      const y = PAD + row * CELL;
-      const m = 4;
-      // 丸角の淡いハイライト
-      ctx.fillStyle = color;
-      _roundRect(x + m, y + m, CELL - m * 2, CELL - m * 2, 8);
-      ctx.fill();
-      ctx.strokeStyle = border;
-      ctx.lineWidth = 1.5;
-      _roundRect(x + m, y + m, CELL - m * 2, CELL - m * 2, 8);
-      ctx.stroke();
-      // 中央の小丸
-      ctx.fillStyle = border;
-      ctx.beginPath();
-      ctx.arc(x + CELL/2, y + CELL/2, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  // ネットワークイベント
+  function _bindNetwork() {
+
+    Network.onOpponentJoined(async (opponentName, firstTurn) => {
+      if (myIndex === 0) {
+        if (_gameStarted) {
+          await Network.sendRoomFull();
+          return;
+        }
+        playerNames[1] = opponentName;
+        const ft = Math.random() < 0.5 ? 0 : 1;
+        await Network.ackJoin(playerNames[0], ft);
+        _gameStarted = true;
+        _startGame(playerNames[0], playerNames[1], ft);
+      } else {
+        playerNames[0] = opponentName;
+        _gameStarted = true;
+        _startGame(playerNames[0], playerNames[1], firstTurn);
+        _setLoading('btn-join', false);
+      }
+    });
+
+    Network.onForcedSpectate(() => {
+      myIndex = -1;
+      _setLoading('btn-join', false);
+      showScreen('screen-waiting');
+      setStatus('満員のため観戦モードに切り替えました…');
+    });
+
+    Network.onSpectatorJoined(() => {
+      if (!gameState || myIndex !== 0) return;
+      Network.sendStateSync(gameState, playerNames[0], playerNames[1]);
+    });
+
+    Network.onSpectateSync((state, nameA, nameB) => {
+      gameState = Game.deepClone(state);
+      myIndex = -1;
+      playerNames[0] = nameA; playerNames[1] = nameB;
+      showScreen('screen-game');
+      _redraw(); _updateInfo(); _updateStatus();
+      _setLoading('btn-spectate', false);
+    });
+
+    Network.onGameAction(action => _applyRemote(action));
+
+    Network.onOpponentLeft(() => {
+      if (myIndex === -1 || !gameState || gameState.over) return;
+      Network.leave();
+      _clearUrl();
+      _gameStarted = false;
+      document.getElementById('result-title').textContent = '相手が切断しました';
+      document.getElementById('result-sub').textContent   = 'ロビーに戻ります';
+      document.getElementById('result-overlay').classList.add('show');
+    });
   }
 
-  // 配置ハイライト（手札からの配置先）
-  function _drawPlaceHighlights(cells, myIndex, state) {
-    const { CELL, PAD } = CFG;
-    const color  = myIndex === 0 ? 'rgba(255,107,157,0.12)' : 'rgba(91,200,245,0.12)';
-    const border = myIndex === 0 ? 'rgba(255,107,157,0.45)' : 'rgba(91,200,245,0.45)';
-    for (const { col, row } of cells) {
-      const x = PAD + col * CELL;
-      const y = PAD + row * CELL;
-      const m = 4;
-      ctx.fillStyle = color;
-      _roundRect(x + m, y + m, CELL - m * 2, CELL - m * 2, 8);
-      ctx.fill();
-      ctx.strokeStyle = border;
-      ctx.lineWidth   = 1.5;
-      ctx.setLineDash([4, 3]);
-      _roundRect(x + m, y + m, CELL - m * 2, CELL - m * 2, 8);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
+  // ゲーム開始
+  function _startGame(nameA, nameB, firstTurn = 0) {
+    gameState = Game.createState(nameA, nameB, firstTurn);
+    myIndex   = Network.getMyIndex();
+    selected  = null; highlightCells = []; placeCells = [];
+    showScreen('screen-game');
+    _updateInfo();
+    _updateStatus();
+    _refreshHandPanel();
+    _redraw();
   }
 
-  // 全駒を描画
-  function _drawPieces(state, myIndex, ui) {
-    for (let i = 0; i < 2; i++) {
-      const p = state.players[i];
-      const isMe = i === myIndex;
+  // Canvasイベント
+  function _bindCanvas() {
 
-      // ボス駒
-      _drawPiece(
-        p.boss.col, p.boss.row,
-        CFG.PIECES[0],
-        i === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE,
-        i === 0 ? CFG.GLOW_SENTE  : CFG.GLOW_GOTE,
-        p.boss.flip,
-        state.turn === i && !state.over,
-        ui.selectedPiece && ui.selectedPiece.type === 'boss' && ui.selectedPiece.pIdx === i,
-        true  // isBocc
-      );
+    canvas.addEventListener('click', e => {
+      if (!gameState || !myTurn || gameState.over) return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width  / rect.width;
+      const sy = canvas.height / rect.height;
+      const cx = (e.clientX - rect.left) * sx;
+      const cy = (e.clientY - rect.top)  * sy;
+      const cell = Render.hitCell(cx, cy);
+      if (cell) _onCellClick(cell.col, cell.row);
+    });
 
-      // フィールド駒
-      for (const f of p.field) {
-        _drawPiece(
-          f.col, f.row,
-          f,
-          i === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE,
-          i === 0 ? CFG.GLOW_SENTE  : CFG.GLOW_GOTE,
-          f.flip,
-          state.turn === i && !state.over,
-          ui.selectedPiece && ui.selectedPiece.type === 'field' &&
-            ui.selectedPiece.pIdx === i && ui.selectedPiece.id === f.id,
-          false
-        );
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (!gameState || !myTurn || gameState.over) return;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width  / rect.width;
+      const sy = canvas.height / rect.height;
+      const cx = (t.clientX - rect.left) * sx;
+      const cy = (t.clientY - rect.top)  * sy;
+      const cell = Render.hitCell(cx, cy);
+      if (cell) _onCellClick(cell.col, cell.row);
+    }, { passive: false });
+  }
+
+  // セルクリック処理
+  function _onCellClick(col, row) {
+    const p = gameState.players[myIndex];
+    const occ = Game.buildOccupied(gameState);
+    const key = Game.pk(col, row);
+    const at  = occ.get(key);
+
+    // 配置先クリック（手札選択中）
+    if (selected && selected.type === 'hand') {
+      const isPlace = placeCells.some(c => c.col === col && c.row === row);
+      if (isPlace) {
+        _doAction({ type: 'place', pieceId: selected.id, col, row });
+        return;
       }
     }
-  }
 
-  // 1駒描画
-  function _drawPiece(col, row, piece, color, glow, flip, isTurn, isSelected, isBoss) {
-    const { CELL, PAD } = CFG;
-    const { x: cx, y: cy } = cellCenter(col, row);
-    const r = isBoss ? CELL * 0.36 : CELL * 0.3;
-
-    ctx.save();
-
-    // 選択時: 背景リング
-    if (isSelected) {
-      ctx.fillStyle = color.replace(')', ', 0.2)').replace('rgb', 'rgba');
-      ctx.beginPath();
-      ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
-      ctx.fill();
+    // 移動先クリック（駒選択中）
+    if (selected && (selected.type === 'boss' || selected.type === 'field')) {
+      const isMove = highlightCells.some(c => c.col === col && c.row === row);
+      if (isMove) {
+        const action = selected.type === 'boss'
+          ? { type: 'move', subtype: 'boss', col, row }
+          : { type: 'move', subtype: 'field', pieceId: selected.id, col, row };
+        _doAction(action);
+        return;
+      }
     }
 
-    // グロー
-    ctx.shadowColor = glow;
-    ctx.shadowBlur  = isTurn ? (isBoss ? 24 : 18) : 8;
+    // 自分の駒をクリック → 選択
+    if (at && at.pIdx === myIndex) {
+      const pieceType = at.type === 'boss' ? 'boss' : at.piece.id;
+      const newSel = at.type === 'boss'
+        ? { type: 'boss', pIdx: myIndex }
+        : { type: 'field', pIdx: myIndex, id: at.piece.id };
 
-    // 外リング
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = isSelected ? 3 : (isBoss ? 2.5 : 2);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
+      // 同じ駒をクリック → 選択解除
+      if (selected && selected.type === newSel.type && selected.id === newSel.id) {
+        selected = null; highlightCells = []; placeCells = [];
+      } else {
+        selected = newSel;
+        placeCells = [];
+        // 合法移動先を計算
+        const flip = at.type === 'boss' ? p.boss.flip : at.piece.flip;
+        highlightCells = Game.legalMovesForPiece(col, row, pieceType, flip, occ, myIndex);
+      }
+      _redraw();
+      return;
+    }
 
-    // 塗り（パステル）
-    const grad = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, 1, cx, cy, r);
-    grad.addColorStop(0, color + 'dd');
-    grad.addColorStop(1, color + '44');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 1.5, 0, Math.PI * 2);
-    ctx.fill();
+    // 何もない/相手の駒 → 選択解除
+    selected = null; highlightCells = []; placeCells = [];
+    _redraw();
+  }
 
-    // ボスは星マーク
-    if (isBoss) {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = `bold ${Math.round(r * 0.85)}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('★', cx, cy);
+  // 手札カードクリック（HTMLボタン）
+  function onHandCardClick(pieceId) {
+    if (!myTurn || !gameState || gameState.over) return;
+    const p = gameState.players[myIndex];
+    const actions = Game.getLegalActions(gameState, myIndex);
+
+    // 同じカード → 選択解除
+    if (selected && selected.type === 'hand' && selected.id === pieceId) {
+      selected = null; placeCells = []; highlightCells = [];
+      _redraw();
+      return;
+    }
+
+    selected = { type: 'hand', pIdx: myIndex, id: pieceId };
+    highlightCells = [];
+    // 配置先を収集
+    const placeActions = actions.filter(a => a.type === 'place' && a.pieceId === pieceId);
+    placeCells = placeActions.map(a => ({ col: a.col, row: a.row }));
+    _redraw();
+    _refreshHandPanel();
+  }
+
+  // フィールド駒を手持ちに戻す
+  function onReturnPiece(pieceId) {
+    if (!myTurn || !gameState || gameState.over) return;
+    _doAction({ type: 'return', pieceId });
+  }
+
+  // アクション実行
+  function _doAction(action) {
+    gameState = Game.applyAction(gameState, myIndex, action);
+    Network.sendAction(action);
+    selected = null; highlightCells = []; placeCells = [];
+    _afterAction();
+  }
+
+  // リモートアクション受信
+  function _applyRemote(action) {
+    if (!gameState || gameState.over) return;
+    const actorIdx = myIndex === -1 ? gameState.turn : 1 - myIndex;
+    gameState = Game.applyAction(gameState, actorIdx, action);
+    selected = null; highlightCells = []; placeCells = [];
+    _afterAction();
+  }
+
+  // アクション後
+  function _afterAction() {
+    _updateInfo();
+    _updateStatus();
+    _refreshHandPanel();
+    _redraw();
+    if (gameState.over) _showResult();
+  }
+
+  // Canvas再描画
+  function _redraw() {
+    if (!gameState) return;
+    Render.draw(gameState, myIndex, {
+      highlightCells,
+      placeCells,
+      selectedPiece: selected,
+    });
+  }
+
+  // プレイヤー情報更新
+  function _updateInfo() {
+    if (!gameState) return;
+    const p0 = gameState.players[0];
+    const p1 = gameState.players[1];
+
+    document.getElementById('sente-name').textContent = p0.name || '---';
+    document.getElementById('gote-name').textContent  = p1.name || '---';
+    document.getElementById('sente-hand-count').textContent = p0.hand.length;
+    document.getElementById('gote-hand-count').textContent  = p1.hand.length;
+    document.getElementById('sente-field-count').textContent = p0.field.length;
+    document.getElementById('gote-field-count').textContent  = p1.field.length;
+
+    document.getElementById('sente-panel').classList.toggle('panel-active', gameState.turn === 0);
+    document.getElementById('gote-panel').classList.toggle('panel-active',  gameState.turn === 1);
+  }
+
+  function _updateStatus() {
+    myTurn = myIndex !== -1 && gameState.turn === myIndex;
+    if (myIndex === -1) {
+      setStatus('観戦中 — ' + (gameState.players[gameState.turn].name || '？') + ' のターン');
+    } else if (myTurn) {
+      setStatus('あなたのターン');
     } else {
-      // 絵文字
-      ctx.font = `${Math.round(r * 1.1)}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 0;
-      // flip=true → 180度回転（相手の駒）
-      ctx.translate(cx, cy);
-      if (flip) ctx.rotate(Math.PI);
-      ctx.fillText(piece.emoji, 0, 0);
+      setStatus('相手のターン…');
     }
-
-    ctx.restore();
   }
 
-  function _roundRect(x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
+  // 手札パネル更新
+  function _refreshHandPanel() {
+    if (!gameState) return;
+    for (let i = 0; i < 2; i++) {
+      const isMe = i === myIndex;
+      const p = gameState.players[i];
+      const color = i === 0 ? CFG.COLOR_SENTE : CFG.COLOR_GOTE;
+      const panelId = i === 0 ? 'hand-p0' : 'hand-p1';
+      const panel = document.getElementById(panelId);
+      if (!panel) continue;
+      panel.innerHTML = '';
+
+      // 手札
+      for (const piece of p.hand) {
+        const btn = document.createElement('button');
+        btn.className = 'hand-card';
+        const isSel = selected && selected.type === 'hand' && selected.id === piece.id && i === myIndex;
+        if (isSel) btn.classList.add('selected');
+        btn.style.borderColor = color;
+        btn.innerHTML = `<span class="card-emoji">${piece.emoji}</span><span class="card-name">${piece.name}</span>`;
+        if (isMe && myTurn && !gameState.over) {
+          btn.addEventListener('click', () => onHandCardClick(piece.id));
+        } else {
+          btn.disabled = true;
+        }
+        panel.appendChild(btn);
+      }
+
+      // フィールド駒（「戻す」ボタン付き）
+      for (const f of p.field) {
+        const btn = document.createElement('button');
+        btn.className = 'hand-card hand-card--field';
+        btn.style.borderColor = color;
+        btn.innerHTML = `<span class="card-emoji">${f.emoji}</span><span class="card-name">${f.name}<br><small>盤上</small></span>`;
+        if (isMe && myTurn && !gameState.over) {
+          btn.addEventListener('click', () => onReturnPiece(f.id));
+          btn.title = '手持ちに戻す';
+        } else {
+          btn.disabled = true;
+        }
+        panel.appendChild(btn);
+      }
+
+      if (panel.children.length === 0) {
+        panel.innerHTML = '<div class="hand-empty">手札なし</div>';
+      }
+      // スマホ用パネルへ同期
+      const mob = document.getElementById(panelId + '-mobile');
+      if (mob) mob.innerHTML = panel.innerHTML;
+    }
   }
 
-  return { init, draw, hitCell, fitCanvas };
+  // 結果オーバーレイ
+  function _showResult() {
+    const w = gameState.winner;
+    const wName = gameState.players[w].name || `Player ${w}`;
+    const isMe  = w === myIndex;
+    const isSp  = myIndex === -1;
+
+    if (isSp) {
+      document.getElementById('result-title').textContent = wName;
+      document.getElementById('result-sub').textContent   = 'の勝利！';
+    } else {
+      document.getElementById('result-title').textContent = isMe ? '🎉 勝利！' : '😞 敗北…';
+      document.getElementById('result-sub').textContent   = `${wName} の勝ち！`;
+    }
+    document.getElementById('result-overlay').classList.add('show');
+  }
+
+  function _flashErr(id, msg) {
+    const el = document.getElementById(id);
+    el.placeholder = msg;
+    el.classList.add('input-error');
+    setTimeout(() => { el.placeholder = ''; el.classList.remove('input-error'); }, 2000);
+  }
+
+  function _setLoading(id, v) {
+    const b = document.getElementById(id);
+    b.disabled = v;
+    b.dataset.orig = b.dataset.orig || b.textContent;
+    b.textContent = v ? '接続中…' : b.dataset.orig;
+  }
+
+  return { init };
 
 })();
+
+window.addEventListener('DOMContentLoaded', () => UI.init());
