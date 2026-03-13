@@ -12,7 +12,7 @@ const UI = (() => {
 
   const canvas = document.getElementById('game-canvas');
 
-  // 駒の移動説明（手札カード表示用）
+  // 駒の移動説明
   const MOVE_DESC = {
     bear:   '8方向1マス',
     wolf:   '8方向1マス',
@@ -302,8 +302,8 @@ const UI = (() => {
     document.getElementById('opp-name').textContent         = pOpp.name || '---';
     document.getElementById('your-hand-count').textContent  = pMe.hand.length;
     document.getElementById('opp-hand-count').textContent   = pOpp.hand.length;
-    document.getElementById('your-field-count').textContent = pMe.field.length  + 1;
-    document.getElementById('opp-field-count').textContent  = pOpp.field.length + 1;
+    document.getElementById('your-field-count').textContent = pMe.field.length;
+    document.getElementById('opp-field-count').textContent  = pOpp.field.length;
     document.getElementById('your-panel').classList.toggle('panel-active', gameState.turn === meIdx);
     document.getElementById('opp-panel').classList.toggle('panel-active',  gameState.turn === oppIdx);
   }
@@ -330,10 +330,10 @@ const UI = (() => {
     if (yourLabel) yourLabel.textContent = myIndex === -1 ? '先手の手札' : 'あなたの手札';
     if (oppLabel)  oppLabel.textContent  = myIndex === -1 ? '後手の手札' : '相手の手札';
 
-    // PC用パネル（hand-your=右=自分、hand-opp=左=相手）
+    // PC用パネル
     _buildHandPanel('hand-your', meIdx,  myIndex !== -1);
     _buildHandPanel('hand-opp',  oppIdx, false);
-    // スマホ用パネル（独立ビルド、イベントも正しく設定）
+    // スマホ用パネル
     _buildHandPanel('hand-your-mobile', meIdx,  myIndex !== -1);
     _buildHandPanel('hand-opp-mobile',  oppIdx, false);
   }

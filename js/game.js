@@ -71,8 +71,7 @@ const Game = (() => {
     if (pieces.length === 0) return true;
     const cols = pieces.map(p => p.col);
     const rows = pieces.map(p => p.row);
-    return (Math.max(...cols) - Math.min(...cols) < 4) &&
-           (Math.max(...rows) - Math.min(...rows) < 4);
+    return (Math.max(...cols) - Math.min(...cols) < 4) && (Math.max(...rows) - Math.min(...rows) < 4);
   }
 
   // いずれかの駒（自分・相手問わず）と辺/角接触しているか
@@ -117,6 +116,7 @@ const Game = (() => {
       // 連結維持チェック
       if (!isConnected(afterPieces)) return;
 
+      // 移動後に駒と接触しているか
       const occAfter = new Map(occupied);
       occAfter.delete(pk(col, row));
       occAfter.delete(pk(nc, nr));  // 敵駒を取る場合も除く
@@ -279,16 +279,22 @@ const Game = (() => {
     }
   }
 
-  // 勝利条件: 相手たいしょうの上下左右4マスがすべて埋まった
+  // 勝利条件: いずれかのたいしょうの上下左右4マスがすべて埋まった
   function _checkWin(state, actorIdx) {
-    const ep  = state.players[1 - actorIdx];
     const occ = buildOccupied(state);
-    let blocked = 0;
-    for (const dir of ALL4_STRAIGHT) {
-      const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
-      if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
+    for (let victim = 0; victim < 2; victim++) {
+      const ep = state.players[victim];
+      let blocked = 0;
+      for (const dir of ALL4_STRAIGHT) {
+        const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
+        if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
+      }
+      if (blocked === 4) {
+        state.over   = true;
+        state.winner = 1 - victim; // 囲まれた側の相手が勝者
+        return;
+      }
     }
-    if (blocked === 4) { state.over = true; state.winner = actorIdx; }
   }
 
   function deepClone(state) { return JSON.parse(JSON.stringify(state)); }
