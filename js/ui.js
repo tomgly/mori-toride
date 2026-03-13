@@ -389,16 +389,22 @@ const UI = (() => {
   }
 
   function _showResult() {
-    const w     = gameState.winner;
-    const wName = gameState.players[w].name || `Player ${w}`;
-    const isMe  = w === myIndex;
-    const isSp  = myIndex === -1;
-    if (isSp) {
-      document.getElementById('result-title').textContent = wName;
-      document.getElementById('result-sub').textContent   = 'の勝利！';
+    const w = gameState.winner;
+    if (w === -1) {
+      // 引き分け
+      document.getElementById('result-title').textContent = '🤝 引き分け';
+      document.getElementById('result-sub').textContent   = '両方のたいしょうが動けなくなりました';
     } else {
-      document.getElementById('result-title').textContent = isMe ? '🎉 勝利！' : '😞 敗北…';
-      document.getElementById('result-sub').textContent   = `${wName} の勝ち！`;
+      const wName = gameState.players[w].name || `Player ${w}`;
+      const isMe  = w === myIndex;
+      const isSp  = myIndex === -1;
+      if (isSp) {
+        document.getElementById('result-title').textContent = wName;
+        document.getElementById('result-sub').textContent   = 'の勝利！';
+      } else {
+        document.getElementById('result-title').textContent = isMe ? '🎉 勝利！' : '😞 敗北…';
+        document.getElementById('result-sub').textContent   = `${wName} の勝ち！`;
+      }
     }
     document.getElementById('result-overlay').classList.add('show');
   }

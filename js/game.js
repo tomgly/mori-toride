@@ -261,7 +261,7 @@ const Game = (() => {
       p.hand.push(piece);
     }
 
-    _checkWin(next, pIdx);
+    _checkWin(next);
     if (!next.over) {
       _autoCenterAll(next);
       next.turn = 1 - pIdx;
@@ -313,27 +313,25 @@ const Game = (() => {
     }
   }
 
-  // 勝利条件: いずれかのたいしょうの上下左右4マスがすべて埋まった
-  function _checkWin(state, actorIdx) {
+  // 勝利条件: たいしょうの上下左右4マスがすべて埋まった
+  function _checkWin(state) {
     const occ = buildOccupied(state);
-    console.log('[checkWin] occ keys:', [...occ.keys()]);
-    for (let victim = 0; victim < 2; victim++) {
-      const ep = state.players[victim];
+    const stuck = [false, false];
+    for (let i = 0; i < 2; i++) {
+      const boss = state.players[i].boss;
       let blocked = 0;
       for (const dir of ALL4_STRAIGHT) {
-        const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
-        const outOfBounds = !inBounds(nc, nr);
-        const isOccupied  = occ.has(pk(nc, nr));
-        console.log(`[checkWin] victim=${victim} boss=(${ep.boss.col},${ep.boss.row}) dir=${dir} -> (${nc},${nr}) outOfBounds=${outOfBounds} occupied=${isOccupied}`);
-        if (outOfBounds || isOccupied) blocked++;
+        const { col: nc, row: nr } = step(boss.col, boss.row, dir);
+        if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
       }
-      console.log(`[checkWin] victim=${victim} blocked=${blocked}`);
-      if (blocked === 4) {
-        state.over   = true;
-        state.winner = 1 - victim;
-        console.log(`[checkWin] WINNER = player ${state.winner}`);
-        return;
-      }
+      stuck[i] = (blocked === 4);
+    }
+    if (stuck[0] && stuck[1]) {
+      state.over = true; state.winner = -1;
+    } else if (stuck[0]) {
+      state.over = true; state.winner = 1;
+    } else if (stuck[1]) {
+      state.over = true; state.winner = 0;
     }
   }
 
