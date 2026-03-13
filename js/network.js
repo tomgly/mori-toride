@@ -3,18 +3,22 @@ const Network = (() => {
   let _sb = null;
   let _ch = null;
   let _roomCode = '';
-  let _myIndex  = -1;
+  let _myIndex  = -1;  // 0=ホスト, 1=ゲスト, -1=観戦
 
   // コールバック
-  let _onOpponentJoined = null;
-  let _onGameAction     = null;
-  let _onOpponentLeft   = null;
-  let _onSpectateSync   = null;
+  let _onOpponentJoined  = null;
+  let _onGameAction      = null;
+  let _onGameOver        = null;
+  let _onOpponentLeft    = null;
+  let _onSpectateSync    = null;
   let _onSpectatorJoined = null;
-  let _onForcedSpectate = null;
+  let _onForcedSpectate  = null;
 
   function init() {
-    _sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
+    // CDNによって window.supabase または supabase としてエクスポートされる
+    const sb = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+    if (!sb) throw new Error('Supabase CDNの読み込みに失敗しました');
+    _sb = sb.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
   }
 
   function _genCode() {
@@ -69,6 +73,10 @@ const Network = (() => {
       if (_onGameAction) _onGameAction(payload);
     });
 
+    _ch.on('broadcast', { event: 'game_over' }, ({ payload }) => {
+      if (_onGameOver) _onGameOver(payload.winner);
+    });
+
     _ch.on('broadcast', { event: 'player_leave' }, () => {
       if (_onOpponentLeft) _onOpponentLeft();
     });
@@ -82,9 +90,13 @@ const Network = (() => {
     });
 
     await new Promise((res, rej) => {
+      const timer = setTimeout(() => rej(new Error('接続タイムアウト（10秒）')), 10000);
       _ch.subscribe(s => {
-        if (s === 'SUBSCRIBED') res();
-        if (s === 'CHANNEL_ERROR') rej(new Error('チャンネル接続失敗'));
+        if (s === 'SUBSCRIBED') { clearTimeout(timer); res(); }
+        if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') {
+          clearTimeout(timer);
+          rej(new Error(`チャンネル接続失敗 (${s})`));
+        }
       });
     });
 
@@ -105,6 +117,10 @@ const Network = (() => {
     if (_ch) await _ch.send({ type: 'broadcast', event: 'state_sync', payload: { state, nameA, nameB } });
   }
 
+  async function sendGameOver(winner) {
+    if (_ch) await _ch.send({ type: 'broadcast', event: 'game_over', payload: { winner } });
+  }
+
   async function sendAction(action) {
     if (_ch) await _ch.send({ type: 'broadcast', event: 'game_action', payload: action });
   }
@@ -118,6 +134,7 @@ const Network = (() => {
 
   function onOpponentJoined(fn)  { _onOpponentJoined  = fn; }
   function onGameAction(fn)      { _onGameAction      = fn; }
+  function onGameOver(fn)        { _onGameOver        = fn; }
   function onOpponentLeft(fn)    { _onOpponentLeft    = fn; }
   function onSpectateSync(fn)    { _onSpectateSync    = fn; }
   function onSpectatorJoined(fn) { _onSpectatorJoined = fn; }
@@ -127,8 +144,8 @@ const Network = (() => {
 
   return {
     init, createRoom, joinRoom, spectateRoom,
-    ackJoin, sendRoomFull, sendStateSync, sendAction, leave,
-    onOpponentJoined, onGameAction, onOpponentLeft, onSpectateSync,
+    ackJoin, sendRoomFull, sendStateSync, sendGameOver, sendAction, leave,
+    onOpponentJoined, onGameAction, onGameOver, onOpponentLeft, onSpectateSync,
     onSpectatorJoined, onForcedSpectate,
     getMyIndex, getRoomCode,
   };

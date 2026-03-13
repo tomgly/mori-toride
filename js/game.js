@@ -322,10 +322,15 @@ const Game = (() => {
       let blocked = 0;
       for (const dir of ALL4_STRAIGHT) {
         const { col: nc, row: nr } = step(boss.col, boss.row, dir);
-        if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
+        const ob = !inBounds(nc, nr);
+        const oc = occ.has(pk(nc, nr));
+        console.log(`[checkWin] i=${i} boss=(${boss.col},${boss.row}) dir=${dir} -> (${nc},${nr}) outOfBounds=${ob} occupied=${oc}`);
+        if (ob || oc) blocked++;
       }
+      console.log(`[checkWin] i=${i} blocked=${blocked}`);
       stuck[i] = (blocked === 4);
     }
+    console.log(`[checkWin] stuck=${JSON.stringify(stuck)}`);
     if (stuck[0] && stuck[1]) {
       state.over = true; state.winner = -1;
     } else if (stuck[0]) {

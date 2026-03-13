@@ -168,6 +168,14 @@ const UI = (() => {
 
     Network.onGameAction(action => _applyRemote(action));
 
+    Network.onGameOver(winner => {
+      if (!gameState || gameState.over) return;
+      gameState = Game.deepClone(gameState);
+      gameState.over   = true;
+      gameState.winner = winner;
+      _afterAction();
+    });
+
     Network.onOpponentLeft(() => {
       if (myIndex === -1 || !gameState || gameState.over) return;
       Network.leave(); _clearUrl(); _gameStarted = false;
@@ -273,6 +281,7 @@ const UI = (() => {
     Network.sendAction(action);
     selected = null; highlightCells = []; placeCells = [];
     _afterAction();
+    if (gameState.over) Network.sendGameOver(gameState.winner);
   }
 
   function _applyRemote(action) {
