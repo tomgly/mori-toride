@@ -261,9 +261,9 @@ const Game = (() => {
       p.hand.push(piece);
     }
 
+    _autoCenterAll(next);
     _checkWin(next);
     if (!next.over) {
-      _autoCenterAll(next);
       next.turn = 1 - pIdx;
     }
     return next;
