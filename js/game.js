@@ -66,12 +66,12 @@ const Game = (() => {
     return visited.size === pieces.length;
   }
 
-  // bounding box チェック: 全駒(+新座標)が4×4以内か
+  // bounding box チェック: 全駒が3マス差以内に収まるか
   function withinBBox(pieces) {
     if (pieces.length === 0) return true;
     const cols = pieces.map(p => p.col);
     const rows = pieces.map(p => p.row);
-    return (Math.max(...cols) - Math.min(...cols) < 4) && (Math.max(...rows) - Math.min(...rows) < 4);
+    return (Math.max(...cols) - Math.min(...cols) <= 3) && (Math.max(...rows) - Math.min(...rows) <= 3);
   }
 
   // いずれかの駒（自分・相手問わず）と辺/角接触しているか
@@ -88,7 +88,7 @@ const Game = (() => {
   function legalMovesForPiece(col, row, pieceType, occupied, pIdx, player) {
     const moves = [];
 
-    // たいしょう: 自由に8方向1マス（連結・接触チェックなし）
+    // たいしょう: 自由に8方向1マス
     if (pieceType === 'bear') {
       for (const dir of ALL8) {
         const { col: nc, row: nr } = step(col, row, dir);
@@ -107,8 +107,8 @@ const Game = (() => {
       if (!inBounds(nc, nr)) return;
       const who = occupied.get(pk(nc, nr));
       if (who && who.pIdx === pIdx) return;       // 味方マス不可
-      if (who && who.type === 'boss') return;      // 相手ボス不可（乗れない）
-      if (who) return;                             // 相手の一般駒マスも不可
+      if (who && who.type === 'boss') return;     // 相手ボス不可
+      if (who) return;                            // 相手の一般駒マスも不可
 
       // 移動後の自駒リスト
       const afterPieces = [...myPiecesWithout, { col: nc, row: nr }];
@@ -119,7 +119,6 @@ const Game = (() => {
       // 移動後に駒と接触しているか
       const occAfter = new Map(occupied);
       occAfter.delete(pk(col, row));
-      occAfter.delete(pk(nc, nr));  // 敵駒を取る場合も除く
       if (!touchesAny(nc, nr, occAfter, pk(nc, nr))) return;
 
       moves.push({ col: nc, row: nr });

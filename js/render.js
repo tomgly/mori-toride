@@ -75,6 +75,7 @@ const Render = (() => {
     _drawBg();
     if (ui.highlightCells) _drawHighlights(ui.highlightCells, myIndex);
     if (ui.placeCells)     _drawPlaceHighlights(ui.placeCells, myIndex);
+    if (ui.lastActionCell) _drawLastActionHighlight(ui.lastActionCell, myIndex);
     _drawPieces(state, myIndex, ui);
   }
 
@@ -85,6 +86,23 @@ const Render = (() => {
     grad.addColorStop(1,   '#fff0f8');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
+  }
+
+  function _drawLastActionHighlight(cell, myIndex) {
+    const { CELL } = CFG;
+    const { x, y } = cellCenter(cell.col, cell.row, myIndex);
+    const m = 2;
+    // 黄色の強調リング
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth   = 3.5;
+    ctx.setLineDash([6, 3]);
+    _roundRect(x - CELL/2 + m, y - CELL/2 + m, CELL - m*2, CELL - m*2, 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 薄い黄色背景
+    ctx.fillStyle = 'rgba(255,209,102,0.18)';
+    _roundRect(x - CELL/2 + m, y - CELL/2 + m, CELL - m*2, CELL - m*2, 10);
+    ctx.fill();
   }
 
   function _drawHighlights(cells, myIndex) {
@@ -144,8 +162,7 @@ const Render = (() => {
           i === 0 ? CFG.GLOW_SENTE  : CFG.GLOW_GOTE,
           flip,
           state.turn === i && !state.over,
-          ui.selectedPiece && ui.selectedPiece.type === 'field' &&
-            ui.selectedPiece.pIdx === i && ui.selectedPiece.id === f.id,
+          ui.selectedPiece && ui.selectedPiece.type === 'field' && ui.selectedPiece.pIdx === i && ui.selectedPiece.id === f.id,
           false
         );
       }
@@ -177,7 +194,7 @@ const Render = (() => {
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(cx, cy, r - 1.5, 0, Math.PI*2); ctx.fill();
 
-    ctx.shadowBlur = 0;
+    ctx.shadowBlur  = 0;
     ctx.shadowColor = 'transparent';
     const fontSize = isBoss ? Math.round(r * 1.15) : Math.round(r * 1.1);
     ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", serif`;

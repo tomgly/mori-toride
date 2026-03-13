@@ -9,6 +9,7 @@ const UI = (() => {
   let selected       = null;
   let highlightCells = [];
   let placeCells     = [];
+  let lastActionCell = null; // 最後の一手のセル座標
 
   const canvas = document.getElementById('game-canvas');
 
@@ -184,7 +185,8 @@ const UI = (() => {
       gameState = Game.deepClone(gameState);
       gameState.over   = true;
       gameState.winner = winner;
-      _afterAction();
+      _updateInfo(); _updateStatus(); _refreshHandPanel(); _redraw();
+      setTimeout(() => _showResult(), 2000);
     });
 
     Network.onOpponentLeft(() => {
@@ -314,6 +316,7 @@ const UI = (() => {
   function _doAction(action) {
     gameState = Game.applyAction(gameState, myIndex, action);
     Network.sendAction(action);
+    _recordLastAction(action);
     selected = null; highlightCells = []; placeCells = [];
     _afterAction();
     if (gameState.over) Network.sendGameOver(gameState.winner);
@@ -323,18 +326,30 @@ const UI = (() => {
     if (!gameState || gameState.over) return;
     const actorIdx = myIndex === -1 ? gameState.turn : 1 - myIndex;
     gameState = Game.applyAction(gameState, actorIdx, action);
+    _recordLastAction(action);
     selected = null; highlightCells = []; placeCells = [];
     _afterAction();
   }
 
+  function _recordLastAction(action) {
+    if (action.col !== undefined && action.row !== undefined) {
+      lastActionCell = { col: action.col, row: action.row };
+    } else {
+      lastActionCell = null; // returnアクションは座標なし
+    }
+  }
+
   function _afterAction() {
     _updateInfo(); _updateStatus(); _refreshHandPanel(); _redraw();
-    if (gameState.over) _showResult();
+    if (gameState.over) {
+      // 最後の一手をハイライトしたまま2秒待ってから結果表示
+      setTimeout(() => _showResult(), 2000);
+    }
   }
 
   function _redraw() {
     if (!gameState) return;
-    Render.draw(gameState, myIndex, { highlightCells, placeCells, selectedPiece: selected });
+    Render.draw(gameState, myIndex, { highlightCells, placeCells, selectedPiece: selected, lastActionCell });
   }
 
   function _updateInfo() {
