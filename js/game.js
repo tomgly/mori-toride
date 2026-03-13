@@ -88,14 +88,13 @@ const Game = (() => {
   function legalMovesForPiece(col, row, pieceType, occupied, pIdx, player) {
     const moves = [];
 
-    // たいしょう: 自由に8方向1マス
+    // たいしょう: 自由に8方向1マス（連結・接触チェックなし）
     if (pieceType === 'bear') {
       for (const dir of ALL8) {
         const { col: nc, row: nr } = step(col, row, dir);
         if (!inBounds(nc, nr)) continue;
         const who = occupied.get(pk(nc, nr));
-        if (who && who.pIdx === pIdx) continue;   // 味方マス不可
-        if (who && who.type === 'boss') continue;  // 相手ボス不可
+        if (who) continue;   // 誰かいるマスは不可（味方・相手ボス・相手一般すべて）
         moves.push({ col: nc, row: nr });
       }
       return moves;
@@ -109,6 +108,7 @@ const Game = (() => {
       const who = occupied.get(pk(nc, nr));
       if (who && who.pIdx === pIdx) return;       // 味方マス不可
       if (who && who.type === 'boss') return;      // 相手ボス不可（乗れない）
+      if (who) return;                             // 相手の一般駒マスも不可
 
       // 移動後の自駒リスト
       const afterPieces = [...myPiecesWithout, { col: nc, row: nr }];
@@ -149,7 +149,7 @@ const Game = (() => {
           if (!inBounds(nc, nr)) break;
           const who = occupied.get(pk(nc, nr));
           if (who) {
-            if (who.pIdx !== pIdx) _tryAdd(nc, nr); // 敵は取れる（止まる）
+            if (who.pIdx !== pIdx) _tryAdd(nc, nr);
             break;
           }
           _tryAdd(nc, nr);
@@ -240,11 +240,9 @@ const Game = (() => {
 
     if (action.type === 'move') {
       if (action.subtype === 'boss') {
-        _captureAt(ep, action.col, action.row);
         p.boss.col = action.col; p.boss.row = action.row;
       } else {
         const f = p.field.find(x => x.id === action.pieceId);
-        _captureAt(ep, action.col, action.row);
         f.col = action.col; f.row = action.row;
       }
     }
@@ -334,11 +332,16 @@ const Game = (() => {
       let blocked = 0;
       for (const dir of ALL4_STRAIGHT) {
         const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
-        if (!inBounds(nc, nr) || occ.has(pk(nc, nr))) blocked++;
+        const outOfBounds = !inBounds(nc, nr);
+        const occupied    = occ.has(pk(nc, nr));
+        console.log(`[checkWin] victim=${victim} boss=(${ep.boss.col},${ep.boss.row}) dir=${dir} -> (${nc},${nr}) outOfBounds=${outOfBounds} occupied=${occupied}`);
+        if (outOfBounds || occupied) blocked++;
       }
+      console.log(`[checkWin] victim=${victim} blocked=${blocked}`);
       if (blocked === 4) {
         state.over   = true;
-        state.winner = 1 - victim; // 囲まれた側の相手が勝者
+        state.winner = 1 - victim;
+        console.log(`[checkWin] WINNER = player ${state.winner}`);
         return;
       }
     }

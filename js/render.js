@@ -179,7 +179,7 @@ const Render = (() => {
 
     ctx.shadowBlur = 0;
     const fontSize = isBoss ? Math.round(r * 1.15) : Math.round(r * 1.1);
-    ctx.font = `${fontSize}px serif`;
+    ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.translate(cx, cy);
