@@ -74,7 +74,8 @@ const UI = (() => {
         showScreen('screen-waiting');
         setStatus('相手の参加を待っています…');
       } catch (e) {
-        alert('ルーム作成失敗: ' + e.message);
+        console.error('ルーム作成エラー:', e);
+        alert('ルーム作成失敗: ' + e.message + '\n\nSupabaseへの接続に失敗した可能性があります。ページを再読み込みして再試行してください。');
       } finally { _setLoading('btn-create', false); }
     });
 
@@ -347,41 +348,39 @@ const UI = (() => {
 
     // 手札駒
     for (const piece of p.hand) {
-      const btn = document.createElement('button');
-      btn.className = 'hand-card';
+      const card = document.createElement('div');
+      card.className = 'hand-card';
       const isSel = isMe && selected && selected.type === 'hand' && selected.id === piece.id;
-      if (isSel) btn.classList.add('selected');
-      btn.style.borderColor = color;
+      if (isSel) card.classList.add('selected');
+      if (!isMe || !myTurn || gameState.over) card.classList.add('disabled');
+      card.style.borderColor = color;
       const desc = MOVE_DESC[piece.id] || '';
-      btn.innerHTML =
+      card.innerHTML =
         `<span class="card-emoji">${piece.emoji}</span>` +
         `<span class="card-name">${piece.name}</span>` +
         `<span class="card-move">${desc}</span>`;
       if (isMe && myTurn && !gameState.over) {
-        btn.addEventListener('click', () => onHandCardClick(piece.id));
-      } else {
-        btn.disabled = true;
+        card.addEventListener('click', () => onHandCardClick(piece.id));
       }
-      panel.appendChild(btn);
+      panel.appendChild(card);
     }
 
-    // 盤上の駒（グレー・戻す操作）
+    // 盤上の駒
     for (const f of p.field) {
-      const btn = document.createElement('button');
-      btn.className = 'hand-card hand-card--field';
+      const card = document.createElement('div');
+      card.className = 'hand-card hand-card--field';
+      if (!isMe || !myTurn || gameState.over) card.classList.add('disabled');
       const desc = MOVE_DESC[f.id] || '';
-      btn.innerHTML =
+      card.innerHTML =
         `<span class="card-emoji">${f.emoji}</span>` +
         `<span class="card-name">${f.name}</span>` +
         `<span class="card-move">${desc}</span>` +
         `<span class="card-field-badge">盤上</span>`;
       if (isMe && myTurn && !gameState.over) {
-        btn.addEventListener('click', () => onReturnPiece(f.id));
-        btn.title = '手持ちに戻す';
-      } else {
-        btn.disabled = true;
+        card.addEventListener('click', () => onReturnPiece(f.id));
+        card.title = '手持ちに戻す';
       }
-      panel.appendChild(btn);
+      panel.appendChild(card);
     }
 
     if (panel.children.length === 0) {

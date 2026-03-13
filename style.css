@@ -6,7 +6,6 @@
   --lavender:#c9b8ff;
   --green:   #6bcb77;
   --peach:   #ffb347;
-
   --bg:      #f0f9ff;
   --surface: #ffffff;
   --surface2:#f0f8ff;
@@ -15,10 +14,8 @@
   --text:    #1a3a4a;
   --dim:     #6090a8;
   --dim2:    #a8d0e8;
-
-  --font-display: 'Fredoka One', cursive;
-  --font-body:    'M PLUS Rounded 1c', sans-serif;
-
+  --font-display: 'Fredoka One', 'Helvetica Neue', Arial, sans-serif;
+  --font-body:    'M PLUS Rounded 1c', 'Helvetica Neue', Arial, sans-serif;
   --shadow-soft: 0 4px 20px rgba(255,107,157,0.12);
   --shadow-card: 0 2px 12px rgba(200,100,160,0.1);
 }
@@ -433,16 +430,20 @@ input::placeholder { color: var(--dim2); }
   gap: 3px;
   font-family: var(--font-body);
   width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
 }
 
-.hand-card:hover:not(:disabled) {
+.hand-card:not(.disabled):hover {
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(255,107,157,0.2);
 }
 
-.hand-card:disabled {
-  opacity: 0.55;
+.hand-card.disabled {
+  opacity: 0.5;
   cursor: default;
+  pointer-events: none;
 }
 
 .hand-card.selected {
@@ -463,22 +464,10 @@ input::placeholder { color: var(--dim2); }
   color: #b8b8b8;
 }
 
-/* fieldカードがdisabledでも絵文字を確実に表示 */
-.hand-card--field:disabled {
-  opacity: 0.7;
-}
-
-.hand-card--field .card-emoji {
-  opacity: 1 !important;
-  display: block;
-}
-
 .card-emoji {
   font-size: 1.3rem;
   line-height: 1;
   display: block;
-  -webkit-text-fill-color: initial;
-  color: initial;
 }
 .card-name  { font-size: 0.55rem; color: var(--dim); text-align: center; line-height: 1.3; }
 
