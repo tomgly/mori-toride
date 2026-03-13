@@ -259,8 +259,6 @@ const Game = (() => {
       const piece = p.field.splice(idx, 1)[0];
       delete piece.col; delete piece.row;
       p.hand.push(piece);
-      next.turn = 1 - pIdx;
-      return next;
     }
 
     _checkWin(next, pIdx);
@@ -315,27 +313,19 @@ const Game = (() => {
     }
   }
 
-  function _captureAt(enemyPlayer, col, row) {
-    const idx = enemyPlayer.field.findIndex(f => f.col === col && f.row === row);
-    if (idx !== -1) {
-      const piece = enemyPlayer.field.splice(idx, 1)[0];
-      delete piece.col; delete piece.row;
-      enemyPlayer.hand.push(piece);
-    }
-  }
-
   // 勝利条件: いずれかのたいしょうの上下左右4マスがすべて埋まった
   function _checkWin(state, actorIdx) {
     const occ = buildOccupied(state);
+    console.log('[checkWin] occ keys:', [...occ.keys()]);
     for (let victim = 0; victim < 2; victim++) {
       const ep = state.players[victim];
       let blocked = 0;
       for (const dir of ALL4_STRAIGHT) {
         const { col: nc, row: nr } = step(ep.boss.col, ep.boss.row, dir);
         const outOfBounds = !inBounds(nc, nr);
-        const occupied    = occ.has(pk(nc, nr));
-        console.log(`[checkWin] victim=${victim} boss=(${ep.boss.col},${ep.boss.row}) dir=${dir} -> (${nc},${nr}) outOfBounds=${outOfBounds} occupied=${occupied}`);
-        if (outOfBounds || occupied) blocked++;
+        const isOccupied  = occ.has(pk(nc, nr));
+        console.log(`[checkWin] victim=${victim} boss=(${ep.boss.col},${ep.boss.row}) dir=${dir} -> (${nc},${nr}) outOfBounds=${outOfBounds} occupied=${isOccupied}`);
+        if (outOfBounds || isOccupied) blocked++;
       }
       console.log(`[checkWin] victim=${victim} blocked=${blocked}`);
       if (blocked === 4) {
