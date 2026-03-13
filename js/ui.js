@@ -296,12 +296,10 @@ const UI = (() => {
   }
 
   function _shakeCard(pieceId) {
-    // バイブレーション
     if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
-
-    // 対象カードを全パネルから探して震えアニメ
-    const allPanels = ['hand-your', 'hand-opp', 'hand-your-mobile', 'hand-opp-mobile'];
-    for (const panelId of allPanels) {
+    // 自分のパネルのみ
+    const panels = myIndex === -1 ? ['hand-your', 'hand-your-mobile'] : ['hand-your', 'hand-your-mobile'];
+    for (const panelId of panels) {
       const panel = document.getElementById(panelId);
       if (!panel) continue;
       for (const card of panel.querySelectorAll('.hand-card--field')) {
@@ -314,9 +312,10 @@ const UI = (() => {
   }
 
   function _doAction(action) {
+    const actorIdx = myIndex;
+    _recordLastAction(action, actorIdx, gameState);
     gameState = Game.applyAction(gameState, myIndex, action);
     Network.sendAction(action);
-    _recordLastAction(action);
     selected = null; highlightCells = []; placeCells = [];
     _afterAction();
     if (gameState.over) Network.sendGameOver(gameState.winner);
@@ -325,17 +324,24 @@ const UI = (() => {
   function _applyRemote(action) {
     if (!gameState || gameState.over) return;
     const actorIdx = myIndex === -1 ? gameState.turn : 1 - myIndex;
+    _recordLastAction(action, actorIdx, gameState);
     gameState = Game.applyAction(gameState, actorIdx, action);
-    _recordLastAction(action);
     selected = null; highlightCells = []; placeCells = [];
     _afterAction();
   }
 
-  function _recordLastAction(action) {
-    if (action.col !== undefined && action.row !== undefined) {
-      lastActionCell = { col: action.col, row: action.row };
+  // 最後の一手を「どのプレイヤーのどの駒」として記録
+  function _recordLastAction(action, actorIdx, state) {
+    if (action.type === 'move') {
+      if (action.subtype === 'boss') {
+        lastActionCell = { pIdx: actorIdx, type: 'boss' };
+      } else {
+        lastActionCell = { pIdx: actorIdx, type: 'field', pieceId: action.pieceId };
+      }
+    } else if (action.type === 'place') {
+      lastActionCell = { pIdx: actorIdx, type: 'field', pieceId: action.pieceId };
     } else {
-      lastActionCell = null; // returnアクションは座標なし
+      lastActionCell = null;
     }
   }
 
@@ -349,7 +355,18 @@ const UI = (() => {
 
   function _redraw() {
     if (!gameState) return;
-    Render.draw(gameState, myIndex, { highlightCells, placeCells, selectedPiece: selected, lastActionCell });
+    // lastActionCellの駒IDから現在の座標を解決
+    let resolvedLastCell = null;
+    if (lastActionCell) {
+      const p = gameState.players[lastActionCell.pIdx];
+      if (lastActionCell.type === 'boss') {
+        resolvedLastCell = { col: p.boss.col, row: p.boss.row };
+      } else {
+        const f = p.field.find(f => f.id === lastActionCell.pieceId);
+        if (f) resolvedLastCell = { col: f.col, row: f.row };
+      }
+    }
+    Render.draw(gameState, myIndex, { highlightCells, placeCells, selectedPiece: selected, lastActionCell: resolvedLastCell });
   }
 
   function _updateInfo() {
