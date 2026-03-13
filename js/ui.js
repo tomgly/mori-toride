@@ -123,11 +123,22 @@ const UI = (() => {
     document.getElementById('btn-restart').addEventListener('click', () => {
       Network.leave(); _clearUrl();
       document.getElementById('result-overlay').classList.remove('show');
+      document.getElementById('board-view-banner').classList.remove('show');
       gameState = null; myIndex = -1; selected = null;
       highlightCells = []; placeCells = [];
       playerNames = ['', '']; _gameStarted = false;
       document.getElementById('input-room-code').value = '';
       showScreen('screen-lobby');
+    });
+
+    document.getElementById('btn-view-board').addEventListener('click', () => {
+      document.getElementById('result-overlay').classList.remove('show');
+      document.getElementById('board-view-banner').classList.add('show');
+    });
+
+    document.getElementById('btn-back-result').addEventListener('click', () => {
+      document.getElementById('board-view-banner').classList.remove('show');
+      document.getElementById('result-overlay').classList.add('show');
     });
   }
 
@@ -273,7 +284,31 @@ const UI = (() => {
 
   function onReturnPiece(pieceId) {
     if (!myTurn || !gameState || gameState.over) return;
+    const legal = Game.getLegalActions(gameState, myIndex);
+    const canReturn = legal.some(a => a.type === 'return' && a.pieceId === pieceId);
+    if (!canReturn) {
+      _shakeCard(pieceId);
+      return;
+    }
     _doAction({ type: 'return', pieceId });
+  }
+
+  function _shakeCard(pieceId) {
+    // バイブレーション
+    if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
+
+    // 対象カードを全パネルから探して震えアニメ
+    const allPanels = ['hand-your', 'hand-opp', 'hand-your-mobile', 'hand-opp-mobile'];
+    for (const panelId of allPanels) {
+      const panel = document.getElementById(panelId);
+      if (!panel) continue;
+      for (const card of panel.querySelectorAll('.hand-card--field')) {
+        if (card.dataset.pieceId === pieceId) {
+          card.classList.add('shake-error');
+          setTimeout(() => card.classList.remove('shake-error'), 600);
+        }
+      }
+    }
   }
 
   function _doAction(action) {
@@ -378,6 +413,7 @@ const UI = (() => {
     for (const f of p.field) {
       const card = document.createElement('div');
       card.className = 'hand-card hand-card--field';
+      card.dataset.pieceId = f.id;
       if (!isMe || !myTurn || gameState.over) card.classList.add('disabled');
       const desc = MOVE_DESC[f.id] || '';
       card.innerHTML =
