@@ -451,20 +451,35 @@ input::placeholder { color: var(--dim2); }
 }
 
 .hand-card--field {
-  background: #ebebeb;
-  border-color: #bbb !important;
-  opacity: 0.9;
+  background: #e8e8e8;
+  border-color: #c0c0c0 !important;
 }
 
 .hand-card--field .card-name {
-  color: #999;
+  color: #909090;
 }
 
 .hand-card--field .card-move {
-  color: #bbb;
+  color: #b8b8b8;
 }
 
-.card-emoji { font-size: 1.3rem; line-height: 1; }
+/* fieldカードがdisabledでも絵文字を確実に表示 */
+.hand-card--field:disabled {
+  opacity: 0.7;
+}
+
+.hand-card--field .card-emoji {
+  opacity: 1 !important;
+  display: block;
+}
+
+.card-emoji {
+  font-size: 1.3rem;
+  line-height: 1;
+  display: block;
+  -webkit-text-fill-color: initial;
+  color: initial;
+}
 .card-name  { font-size: 0.55rem; color: var(--dim); text-align: center; line-height: 1.3; }
 
 .hand-empty {

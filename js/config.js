@@ -5,12 +5,12 @@ const CFG = Object.freeze({
   SUPABASE_KEY : "sb_publishable_2_L2UyBcEZ9RarUN89OORw_j2fbVteP",
 
   // 盤面
-  COLS : 7,
-  ROWS : 9,
+  COLS : 5,
+  ROWS : 5,
 
   // Canvas描画
-  CELL : 68,
-  PAD  : 20,
+  CELL : 80,
+  PAD  : 16,
 
   // カラーパレット
   COLOR_SENTE      : "#ff8c69",

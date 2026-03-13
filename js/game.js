@@ -48,7 +48,7 @@ const Game = (() => {
     return [{ col: player.boss.col, row: player.boss.row }, ...player.field.map(f => ({ col: f.col, row: f.row }))];
   }
 
-  // BFS連結チェック（8方向）
+  // BFS連結チェック
   function isConnected(pieces) {
     if (pieces.length <= 1) return true;
     const set = new Set(pieces.map(p => pk(p.col, p.row)));
@@ -266,8 +266,55 @@ const Game = (() => {
     }
 
     _checkWin(next, pIdx);
-    if (!next.over) next.turn = 1 - pIdx;
+    if (!next.over) {
+      _autoCenterAll(next);
+      next.turn = 1 - pIdx;
+    }
     return next;
+  }
+
+  // 全駒のbounding boxを計算して盤面中央に収まるようシフトする
+  function _autoCenterAll(state) {
+    const { COLS, ROWS } = CFG;
+    // 全駒の座標を収集
+    const allPieces = [];
+    for (const p of state.players) {
+      allPieces.push({ col: p.boss.col, row: p.boss.row });
+      for (const f of p.field) allPieces.push({ col: f.col, row: f.row });
+    }
+    if (allPieces.length === 0) return;
+
+    const minC = Math.min(...allPieces.map(p => p.col));
+    const maxC = Math.max(...allPieces.map(p => p.col));
+    const minR = Math.min(...allPieces.map(p => p.row));
+    const maxR = Math.max(...allPieces.map(p => p.row));
+
+    // 現在の中心
+    const centerC = (minC + maxC) / 2;
+    const centerR = (minR + maxR) / 2;
+
+    // 目標は盤面中央
+    const targetC = (COLS - 1) / 2;
+    const targetR = (ROWS - 1) / 2;
+
+    // 整数シフト量
+    const dc = Math.round(targetC - centerC);
+    const dr = Math.round(targetR - centerR);
+
+    if (dc === 0 && dr === 0) return;
+
+    // 全駒をシフト
+    for (const piece of allPieces) {
+      const nc = piece.col + dc;
+      const nr = piece.row + dr;
+      if (!inBounds(nc, nr)) return; // はみ出す場合はシフトしない
+    }
+
+    // 実際にシフト
+    for (const p of state.players) {
+      p.boss.col += dc; p.boss.row += dr;
+      for (const f of p.field) { f.col += dc; f.row += dr; }
+    }
   }
 
   function _captureAt(enemyPlayer, col, row) {

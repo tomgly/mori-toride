@@ -27,11 +27,11 @@ const Render = (() => {
     const isDesktop = vw >= 768;
     let maxW, maxH;
     if (isDesktop) {
-      maxW = Math.min(vw * 0.55, 520);
-      maxH = Math.min(vh - 160, 700);
+      maxW = Math.min(vw * 0.5, 480);
+      maxH = Math.min(vh - 160, 600);
     } else {
-      maxW = vw - 32;
-      maxH = vh * 0.52;
+      maxW = vw - 24;
+      maxH = vh * 0.48;
     }
     const scale = Math.min(maxW / rawW, maxH / rawH, 1);
     canvas.style.width  = (rawW * scale) + 'px';
